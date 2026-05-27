@@ -1,0 +1,10 @@
+data/*.csv
+data/*.parquet
+data/*.zip
+training/models/*.joblib
+training/models/*.json
+**/__pycache__/
+.pytest_cache/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store

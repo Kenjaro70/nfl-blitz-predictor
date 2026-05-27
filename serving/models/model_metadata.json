@@ -1,0 +1,58 @@
+{
+  "model_type": "RandomForestClassifier",
+  "target": "was_blitz",
+  "blitz_definition": ">=5 pass rushers (pff_role == 'Pass Rush')",
+  "feature_order": [
+    "possessionTeam",
+    "defensiveTeam",
+    "offenseFormation",
+    "personnelO",
+    "personnelD",
+    "quarter",
+    "down",
+    "yardsToGo",
+    "absoluteYardlineNumber",
+    "defendersInBox",
+    "preSnapHomeScore",
+    "preSnapVisitorScore",
+    "score_differential",
+    "game_seconds_remaining",
+    "half_seconds_remaining",
+    "is_home_offense",
+    "is_two_minute",
+    "is_red_zone",
+    "is_goal_to_go"
+  ],
+  "categorical_features": [
+    "possessionTeam",
+    "defensiveTeam",
+    "offenseFormation",
+    "personnelO",
+    "personnelD"
+  ],
+  "numeric_features": [
+    "quarter",
+    "down",
+    "yardsToGo",
+    "absoluteYardlineNumber",
+    "defendersInBox",
+    "preSnapHomeScore",
+    "preSnapVisitorScore",
+    "score_differential",
+    "game_seconds_remaining",
+    "half_seconds_remaining",
+    "is_home_offense",
+    "is_two_minute",
+    "is_red_zone",
+    "is_goal_to_go"
+  ],
+  "metrics": {
+    "accuracy": 0.6817142857142857,
+    "roc_auc": 0.6888693429865236,
+    "train_size": 6799,
+    "test_size": 1750,
+    "blitz_rate": 0.24599368347175107
+  },
+  "data_source": "NFL Big Data Bowl 2023 (Kaggle)",
+  "training_seasons": "2021 weeks 1-8"
+}
