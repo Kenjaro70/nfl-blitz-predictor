@@ -78,7 +78,7 @@
       ]
     ],
     "brier_raw": 0.20571837871698562,
-    "brier_calibrated": 0.17517595994555463,
+    "brier_calibrated": 0.17517595994555457,
     "primary_metric": "roc_auc",
     "accuracy_note": "Accuracy is below the majority-class floor by design: the decision threshold is tuned to a 3:1 cost on missed blitzes, which buys recall with accuracy. Use roc_auc, the blitz-class precision/recall, and expected cost per play instead."
   },
@@ -138,7 +138,7 @@
     "method": "IsotonicRegression fit on out-of-fold training predictions",
     "artifact": "blitz_calibrator.joblib",
     "brier_raw": 0.20571837871698562,
-    "brier_calibrated": 0.17517595994555463,
+    "brier_calibrated": 0.17517595994555457,
     "note": "class_weight='balanced' inflates raw probabilities -- the uncalibrated model predicted a mean of 0.434 against an observed rate of 0.261. Serve calibrated probabilities; isotonic is monotone so ranking (AUC) is unchanged.",
     "reliability_calibrated": [
       {
