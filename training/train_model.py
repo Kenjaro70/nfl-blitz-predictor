@@ -185,7 +185,14 @@ def make_random_forest() -> RandomForestClassifier:
 
 def make_logistic_regression() -> Pipeline:
     """One-hot the categoricals: label-encoding imposes a fake ordinal
-    relationship that would unfairly hurt a linear model."""
+    relationship that would unfairly hurt a linear model.
+
+    The categorical columns arrive already label-encoded to integer codes, and
+    OneHotEncoder treats each distinct code as its own level, so this is equivalent
+    to one-hotting the original strings. Unseen categories reach here as -1 and
+    handle_unknown='ignore' turns them into an all-zero block, which is a more
+    sensible fallback than a tree splitting on an arbitrary sentinel value.
+    """
     return Pipeline([
         ("preprocess", ColumnTransformer([
             ("cat", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL_FEATURES),
@@ -195,16 +202,65 @@ def make_logistic_regression() -> Pipeline:
     ])
 
 
-def out_of_fold_probabilities(X, y, groups, n_splits=CALIBRATION_FOLDS):
+# The shipped model. Logistic regression rather than the random forest: across
+# N_STABILITY_SEEDS by-game splits the two are statistically indistinguishable on AUC,
+# and when a tie goes to the simpler model you get coefficients you can hand to a coach,
+# a ~KB artifact instead of ~7MB, and a sane fallback for unseen categories. The random
+# forest is still trained every run as the challenger -- see baseline_comparison.
+make_model = make_logistic_regression
+
+
+def out_of_fold_probabilities(X, y, groups, n_splits=CALIBRATION_FOLDS, factory=None):
     """Probabilities for every training row, each predicted by a model that never
     saw that row's game. These are what the calibrator and the threshold check are
     fit on -- using the held-out test set for either would be tuning on test.
     """
+    factory = factory or make_model
     oof = np.zeros(len(y))
     for fit_idx, pred_idx in GroupKFold(n_splits=n_splits).split(X, y, groups=groups):
-        fold_model = make_random_forest().fit(X.iloc[fit_idx], y.iloc[fit_idx])
+        fold_model = factory().fit(X.iloc[fit_idx], y.iloc[fit_idx])
         oof[pred_idx] = fold_model.predict_proba(X.iloc[pred_idx])[:, 1]
     return oof
+
+
+def logistic_coefficients(pipeline: Pipeline, label_encoders: dict) -> dict:
+    """Pull interpretable coefficients out of the fitted pipeline.
+
+    Numeric features were standardised, so their coefficients are per standard
+    deviation and comparable to each other. Reported as odds ratios: 1.30 means "a
+    one-SD increase in this feature multiplies the odds of a blitz by 1.30".
+    Categorical levels are mapped back through the label encoders to real names.
+    """
+    pre = pipeline.named_steps["preprocess"]
+    coefs = pipeline.named_steps["clf"].coef_[0]
+
+    ohe = pre.named_transformers_["cat"]
+    cat_names = []
+    for col, categories in zip(CATEGORICAL_FEATURES, ohe.categories_):
+        encoder = label_encoders[col]
+        for code in categories:
+            code = int(code)
+            # -1 is the unseen-category sentinel and has no inverse label.
+            label = (encoder.classes_[code]
+                     if 0 <= code < len(encoder.classes_) else "<unseen>")
+            cat_names.append(f"{col}={label}")
+    names = cat_names + list(NUMERIC_FEATURES)
+
+    numeric = {name: float(c) for name, c in zip(names, coefs)
+               if name in NUMERIC_FEATURES}
+    categorical = {name: float(c) for name, c in zip(names, coefs)
+                   if name not in NUMERIC_FEATURES}
+
+    def as_odds(d):
+        return {k: {"coefficient": round(v, 4), "odds_ratio": round(float(np.exp(v)), 4)}
+                for k, v in sorted(d.items(), key=lambda kv: -abs(kv[1]))}
+
+    return {
+        "note": ("Numeric coefficients are per standard deviation (features were "
+                 "standardised) so they are comparable. odds_ratio = exp(coefficient)."),
+        "numeric_per_standard_deviation": as_odds(numeric),
+        "categorical_by_absolute_effect": as_odds(categorical),
+    }
 
 
 def expected_cost(y_true, proba, threshold, c_fn=COST_FALSE_NEGATIVE,
@@ -241,39 +297,41 @@ def stability_across_splits(X, y, groups, n_seeds=N_STABILITY_SEEDS):
     re-measures the leaky play-level split each time, so the leakage claim gets
     error bars rather than resting on one comparison.
     """
-    rf_auc, lr_auc, rf_acc, majority_acc, leaky_auc = [], [], [], [], []
+    shipped_auc, challenger_auc, shipped_acc, majority_acc, leaky_auc = [], [], [], [], []
     for seed in range(n_seeds):
         tr, te = next(GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=seed)
                       .split(X, y, groups=groups))
-        rf = make_random_forest().fit(X.iloc[tr], y.iloc[tr])
-        rf_auc.append(roc_auc_score(y.iloc[te], rf.predict_proba(X.iloc[te])[:, 1]))
-        rf_acc.append(accuracy_score(y.iloc[te], rf.predict(X.iloc[te])))
+        shipped = make_model().fit(X.iloc[tr], y.iloc[tr])
+        shipped_auc.append(roc_auc_score(y.iloc[te], shipped.predict_proba(X.iloc[te])[:, 1]))
+        shipped_acc.append(accuracy_score(y.iloc[te], shipped.predict(X.iloc[te])))
         majority_acc.append(1.0 - float(y.iloc[te].mean()))
 
-        lr = make_logistic_regression().fit(X.iloc[tr], y.iloc[tr])
-        lr_auc.append(roc_auc_score(y.iloc[te], lr.predict_proba(X.iloc[te])[:, 1]))
+        challenger = make_random_forest().fit(X.iloc[tr], y.iloc[tr])
+        challenger_auc.append(
+            roc_auc_score(y.iloc[te], challenger.predict_proba(X.iloc[te])[:, 1]))
 
         # Same model, same seed, but the textbook play-level split -- the one that
         # lets plays from a single game land in both train and test.
         Xl_tr, Xl_te, yl_tr, yl_te = train_test_split(
             X, y, test_size=0.2, stratify=y, random_state=seed)
-        leaky = make_random_forest().fit(Xl_tr, yl_tr)
+        leaky = make_model().fit(Xl_tr, yl_tr)
         leaky_auc.append(roc_auc_score(yl_te, leaky.predict_proba(Xl_te)[:, 1]))
 
-        print(f"    seed {seed}: by-game AUC {rf_auc[-1]:.4f}   play-level AUC {leaky_auc[-1]:.4f}")
+        print(f"    seed {seed}: by-game AUC {shipped_auc[-1]:.4f}   "
+              f"play-level AUC {leaky_auc[-1]:.4f}")
 
     def summarize(values):
         a = np.array(values)
         return {"mean": float(a.mean()), "std": float(a.std(ddof=1)),
                 "min": float(a.min()), "max": float(a.max())}
 
-    leak_delta = np.array(leaky_auc) - np.array(rf_auc)
-    rf_vs_lr = np.array(rf_auc) - np.array(lr_auc)
+    leak_delta = np.array(leaky_auc) - np.array(shipped_auc)
+    challenger_delta = np.array(challenger_auc) - np.array(shipped_auc)
     return {
         "n_seeds": n_seeds,
-        "random_forest_auc": summarize(rf_auc),
-        "logistic_regression_auc": summarize(lr_auc),
-        "random_forest_accuracy": summarize(rf_acc),
+        "shipped_logistic_auc": summarize(shipped_auc),
+        "challenger_random_forest_auc": summarize(challenger_auc),
+        "shipped_logistic_accuracy": summarize(shipped_acc),
         "majority_class_accuracy": summarize(majority_acc),
         "leaky_play_level_auc": summarize(leaky_auc),
         "leakage_delta": {
@@ -281,9 +339,10 @@ def stability_across_splits(X, y, groups, n_seeds=N_STABILITY_SEEDS):
             "std_error": float(leak_delta.std(ddof=1) / np.sqrt(n_seeds)),
             "seeds_where_leaky_higher": int((leak_delta > 0).sum()),
         },
-        "random_forest_minus_logistic": {
-            **summarize(rf_vs_lr),
-            "seeds_where_rf_higher": int((rf_vs_lr > 0).sum()),
+        "challenger_minus_shipped": {
+            **summarize(challenger_delta),
+            "std_error": float(challenger_delta.std(ddof=1) / np.sqrt(n_seeds)),
+            "seeds_where_challenger_higher": int((challenger_delta > 0).sum()),
         },
     }
 
@@ -349,8 +408,8 @@ def main():
     if abs(grid_threshold - DECISION_THRESHOLD) > 0.05:
         print("  WARNING: analytic and empirical thresholds disagree -- check calibration")
 
-    print("\nTraining Random Forest...")
-    model = make_random_forest()
+    print("\nTraining the shipped model (logistic regression)...")
+    model = make_model()
     model.fit(X_train, y_train)
 
     print("\nEvaluating on held-out games...")
@@ -429,14 +488,17 @@ def main():
     print("Confusion matrix (default 0.50 on raw probabilities, for contrast):")
     print(confusion_matrix(y_test, y_pred_default))
 
-    importances = sorted(
-        zip(feature_cols, model.feature_importances_), key=lambda x: -x[1]
-    )
-    print("\nTop 10 features by importance:")
-    for name, imp in importances[:10]:
-        print(f"  {name:<30} {imp:.4f}")
+    # The payoff of shipping a linear model: the whole thing is readable.
+    coefficients = logistic_coefficients(model, label_encoders)
+    print("\nNumeric coefficients (per standard deviation, as odds ratios):")
+    print(f"    {'feature':<28}{'coef':>9}{'odds ratio':>12}")
+    for name, v in coefficients["numeric_per_standard_deviation"].items():
+        print(f"    {name:<28}{v['coefficient']:>9.3f}{v['odds_ratio']:>12.3f}")
+    print("\n  Strongest categorical levels:")
+    for name, v in list(coefficients["categorical_by_absolute_effect"].items())[:10]:
+        print(f"    {name:<44}{v['coefficient']:>9.3f}{v['odds_ratio']:>10.3f}")
 
-    print("\nBaseline comparison (same train/test split, by-game)...")
+    print("\nChallenger comparison (same train/test split, by-game)...")
     baseline_metrics = {}
 
     # Majority-class baseline: is the model actually better than "always predict no-blitz"?
@@ -449,16 +511,19 @@ def main():
         "roc_auc": float(roc_auc_score(y_test, maj_proba)),
     }
 
-    logreg_pipeline = make_logistic_regression()
-    logreg_pipeline.fit(X_train, y_train)
-    lr_pred = logreg_pipeline.predict(X_test)
-    lr_proba = logreg_pipeline.predict_proba(X_test)[:, 1]
-    baseline_metrics["logistic_regression"] = {
-        "accuracy": float(accuracy_score(y_test, lr_pred)),
-        "roc_auc": float(roc_auc_score(y_test, lr_proba)),
+    # Random forest as the challenger. No longer shipped: across N_STABILITY_SEEDS
+    # splits it ties the linear model on AUC, so the tie goes to the model you can
+    # read. Still trained every run so the claim stays checkable rather than asserted.
+    rf = make_random_forest()
+    rf.fit(X_train, y_train)
+    rf_pred = rf.predict(X_test)
+    rf_proba = rf.predict_proba(X_test)[:, 1]
+    baseline_metrics["random_forest_challenger"] = {
+        "accuracy": float(accuracy_score(y_test, rf_pred)),
+        "roc_auc": float(roc_auc_score(y_test, rf_proba)),
     }
 
-    baseline_metrics["random_forest"] = {
+    baseline_metrics["logistic_regression_shipped"] = {
         "accuracy": float(accuracy),
         "roc_auc": float(auc),
     }
@@ -474,21 +539,22 @@ def main():
           "(this refits the model once per seed)...")
     stability = stability_across_splits(X, y, groups)
     print()
-    for key in ("random_forest_auc", "logistic_regression_auc",
-                "random_forest_accuracy", "majority_class_accuracy",
+    for key in ("shipped_logistic_auc", "challenger_random_forest_auc",
+                "shipped_logistic_accuracy", "majority_class_accuracy",
                 "leaky_play_level_auc"):
         s = stability[key]
-        print(f"  {key:<28} {s['mean']:.4f} +/- {s['std']:.4f}   "
+        print(f"  {key:<30} {s['mean']:.4f} +/- {s['std']:.4f}   "
               f"[{s['min']:.4f}, {s['max']:.4f}]")
     ld = stability["leakage_delta"]
     print(f"\n  leakage (play-level AUC - by-game AUC): {ld['mean']:+.4f} "
           f"+/- {ld['std_error']:.4f} (SE)")
     print(f"    play-level split scored higher in {ld['seeds_where_leaky_higher']}"
           f"/{stability['n_seeds']} seeds")
-    rl = stability["random_forest_minus_logistic"]
-    print(f"  random forest - logistic regression AUC: {rl['mean']:+.4f} "
-          f"+/- {rl['std']:.4f}")
-    print(f"    random forest won {rl['seeds_where_rf_higher']}/{stability['n_seeds']} seeds")
+    cd = stability["challenger_minus_shipped"]
+    print(f"  random forest - logistic regression AUC: {cd['mean']:+.4f} "
+          f"+/- {cd['std_error']:.4f} (SE)")
+    print(f"    random forest won {cd['seeds_where_challenger_higher']}"
+          f"/{stability['n_seeds']} seeds -- a tie, so the tie goes to the readable model")
 
     print("\nSaving artifacts...")
     joblib.dump(model, MODEL_DIR / "blitz_model.joblib")
@@ -496,7 +562,16 @@ def main():
     joblib.dump(calibrator, MODEL_DIR / "blitz_calibrator.joblib")
 
     metadata = {
-        "model_type": "RandomForestClassifier",
+        "model_type": "LogisticRegression",
+        "model_pipeline": ("OneHotEncoder(categoricals) + StandardScaler(numerics) "
+                           "-> LogisticRegression(class_weight='balanced')"),
+        "model_selection_note": (
+            "Logistic regression is shipped over the random forest because the two are "
+            "statistically indistinguishable on AUC across the by-game splits in "
+            "'stability', and a tie goes to the interpretable model. See 'coefficients' "
+            "and baseline_comparison.random_forest_challenger."
+        ),
+        "coefficients": coefficients,
         "target": "was_blitz",
         "blitz_definition": f">={BLITZ_THRESHOLD} pass rushers (pff_role == 'Pass Rush')",
         "feature_order": feature_cols,

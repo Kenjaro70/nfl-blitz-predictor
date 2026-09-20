@@ -27,7 +27,7 @@ All pre-snap, all from `plays.csv` (the offense's view of the world before the b
 | Teams | possessionTeam, defensiveTeam, is_home_offense |
 | Pre-snap look | offenseFormation, personnelO, personnelD, **defendersInBox** |
 
-`defendersInBox` ended up being the single most important feature (~19% of total importance) — which is football-obvious in hindsight: when the offense lines up and there are 7 guys near the line of scrimmage, the defense has *fewer* coverage players left, so a blitz is more likely.
+`defendersInBox` ended up being the single strongest feature in the shipped model (+0.64 per standard deviation, odds ratio **1.90**; it was also the top feature by importance, ~19%, in the random forest I started with) — which is football-obvious in hindsight: when the offense lines up and there are 7 guys near the line of scrimmage, the defense has *fewer* coverage players left, so a blitz is more likely.
 
 ### What counts as "pre-snap" — and why `defendersInBox` is allowed but coverage isn't
 
@@ -80,7 +80,7 @@ Two honest caveats I'd raise before being asked:
 
 **It's a charting convention, not a measurement.** "In the box" is a judgement about where
 the box ends. Two charters could disagree at the margin, and my top feature (19% of
-importance) inherits that noise. Worth noting it is *not* a PFF field — it has no `pff_`
+effect) inherits that noise. Worth noting it is *not* a PFF field — it has no `pff_`
 prefix, it comes from the NFL's own game data in `plays.csv` — but that makes it a different
 organization's convention, not an objective one.
 
@@ -113,16 +113,16 @@ play-level split, same model, same seed, paired:
 
 | | Mean ± SD over 10 splits |
 |---|---|
-| By-game AUC (honest) | 0.711 ± 0.017 |
-| Play-level AUC (leaky) | 0.708 ± 0.013 |
-| **Paired difference (leaky − honest)** | **−0.0035 ± 0.0068 (SE)** |
+| By-game AUC (honest) | 0.708 ± 0.018 |
+| Play-level AUC (leaky) | 0.710 ± 0.014 |
+| **Paired difference (leaky − honest)** | **+0.0017 ± 0.0083 (SE)** |
 
-The leaky split scored *higher* in **5 of 10 seeds** — exactly what you'd expect from a
+The leaky split scored higher in **6 of 10 seeds** — exactly what you'd expect from a
 coin flip. The point estimate is slightly negative. There is no detectable leakage effect
 at this sample size.
 
 The −0.015 I originally reported was one draw from a distribution with a standard
-deviation of 0.017. I'd measured noise and told a story about it. The story was
+deviation of 0.018. I'd measured noise and told a story about it. The story was
 plausible — defensive scheme *is* consistent within a game, the mechanism is real — which
 is exactly why I believed a single number that happened to point the way I expected.
 
@@ -194,8 +194,8 @@ reasons it barely moved, and I think the third is the actual lesson:
 
 1. A random forest can partially route around a scrambled feature. It can still split on
    "near either end zone," which carries some signal regardless of direction.
-2. Field position is a weak blitz predictor to begin with — `yards_to_goal` lands at 8.4%
-   importance, well behind `defendersInBox` at 19%.
+2. Field position is a weak blitz predictor to begin with — in the shipped linear model
+   `yards_to_goal` carries a coefficient of −0.14 per SD against `defendersInBox`'s +0.64.
 3. **Correctness and performance are different axes.** The old model was getting an okay
    score partly by accident, off a feature that meant nothing and two flags that almost never
    fired. Any conclusion I drew about red-zone blitz behavior from that model would have been
@@ -219,30 +219,28 @@ The full comparison, all on the same by-game split:
 | Model | ROC AUC | Accuracy | Blitz precision | Blitz recall |
 |---|---|---|---|---|
 | Always predict "no blitz" | 0.500 | **0.739** | — | 0.00 |
-| Logistic regression | 0.682 | 0.655 | — | — |
-| **Random forest** | **0.689** | 0.619 | 0.37 | 0.66 |
+| Random forest (challenger) | 0.689 | 0.619 | 0.37 | 0.66 |
+| **Logistic regression (shipped)** | **0.682** | 0.634 | 0.38 | 0.64 |
 
 Three things I take from this:
 
 **The accuracy gap is a choice, not a bug.** The model is an alert, and the threshold is
 tuned to a stated 3:1 cost on missed blitzes (next section), which spends accuracy to buy
-recall. It catches **66% of blitzes** and is right **37%** of the time when it fires,
+recall. It catches **64% of blitzes** and is right **38%** of the time when it fires,
 against a 26.1% base rate. If I wanted the accuracy number to look good I'd move the
 threshold to 0.5 and catch fewer blitzes, which would be optimizing the writeup instead of
 the decision.
 
 **AUC is the honest headline** because it's threshold-free and base-rate-independent.
-0.711 ± 0.017 against a 0.500 no-skill floor is modest but real — consistent with defenses
+0.708 ± 0.018 against a 0.500 no-skill floor is modest but real — consistent with defenses
 actively disguising blitzes, which is what I'd expect.
 
-**The random forest does not beat logistic regression.** On the single split it's +0.007
-AUC. Across 10 splits it's **+0.003 ± 0.010, winning 6 of 10** — a coin flip. This was the
-second conclusion that didn't survive the error bars. The signal in these features is
-essentially linear, and I can't justify the ensemble on performance. If I were shipping
-this for real I'd use the logistic regression: same accuracy, and I could hand a coach a
-list of coefficients instead of 300 trees.
+**The random forest does not beat logistic regression, so I stopped shipping it.** Across
+10 splits the forest leads by **+0.0032 AUC, SE 0.0033, winning 6 of 10** — a tie. This was
+the second conclusion that didn't survive the error bars, and unlike the leakage one I could
+act on it: the shipped model is now the logistic regression. Its own section is below.
 
-I'd rather walk into a room with a defensible 0.711 ± 0.017 AUC and a clear statement of
+I'd rather walk into a room with a defensible 0.708 ± 0.018 AUC and a clear statement of
 the base rate than a 0.682 accuracy that the first person to do the subtraction takes apart.
 
 ## The decision: turning a probability into a call
@@ -255,7 +253,7 @@ else first.
 
 `class_weight='balanced'` does its job by over-weighting the minority class, and a side
 effect is that the predicted probabilities come out inflated. On the held-out games the
-raw model predicted a **mean blitz probability of 0.434** against an **observed rate of
+raw model predicted a **mean blitz probability of 0.440** against an **observed rate of
 0.261**. It was overstating blitz risk by nearly 2x, and the API was serving those numbers
 to three decimal places.
 
@@ -263,18 +261,23 @@ Isotonic regression, fit on out-of-fold training predictions, fixes it:
 
 | | Brier | Mean predicted | Observed |
 |---|---|---|---|
-| Raw | 0.2057 | 0.434 | 0.261 |
-| Isotonic | **0.1752** | **0.247** | 0.261 |
+| Raw | 0.2148 | 0.440 | 0.261 |
+| Isotonic | **0.1766** | **0.234** | 0.261 |
 
-Reliability by bucket after calibration — predicted 0.29 now really does hit 31%:
+Reliability by bucket after calibration — predicted 0.299 now really does hit 0.299:
 
 | Bucket | n | Predicted | Observed |
 |---|---|---|---|
-| 0.00–0.15 | 511 | 0.100 | 0.137 |
-| 0.15–0.25 | 430 | 0.205 | 0.202 |
-| 0.25–0.35 | 612 | 0.294 | 0.307 |
-| 0.45–0.60 | 153 | 0.517 | 0.542 |
-| 0.60–1.00 | 40 | 0.811 | 0.650 |
+| 0.00–0.15 | 579 | 0.102 | 0.147 |
+| 0.15–0.25 | 407 | 0.202 | 0.199 |
+| 0.25–0.35 | 462 | 0.299 | 0.299 |
+| 0.35–0.45 | 217 | 0.368 | 0.465 |
+| 0.45–0.60 | 69 | 0.539 | 0.551 |
+| 0.60–1.00 | 16 | 0.752 | 0.813 |
+
+The 0.35–0.45 bucket is the visible miss (0.368 predicted, 0.465 observed, n=217). Isotonic
+corrects the overall level, not every local wobble, and I'd rather show the bucket than crop
+the table.
 
 Isotonic is monotone, so AUC is unchanged. This fixes what the numbers mean, not how well
 they rank — which is exactly the distinction I'd missed when I called the old 53% output
@@ -297,29 +300,31 @@ prints what happens if you disagree with me:
 
 | FN:FP | Threshold | Precision | Recall | Alert rate |
 |---|---|---|---|---|
-| 1:1 | 0.50 | 0.56 | 0.22 | 0.10 |
-| 2:1 | 0.33 | 0.48 | 0.44 | 0.24 |
-| **3:1** | **0.25** | **0.37** | **0.66** | **0.46** |
-| 5:1 | 0.17 | 0.32 | 0.82 | 0.67 |
-| 8:1 | 0.11 | 0.28 | 0.95 | 0.89 |
+| 1:1 | 0.50 | 0.63 | 0.09 | 0.04 |
+| 2:1 | 0.33 | 0.50 | 0.33 | 0.17 |
+| **3:1** | **0.25** | **0.38** | **0.64** | **0.44** |
+| 5:1 | 0.17 | 0.32 | 0.81 | 0.66 |
+| 8:1 | 0.11 | 0.29 | 0.90 | 0.81 |
 
 The nice part: once probabilities are calibrated, the cost-optimal threshold has a closed
 form. Alert whenever `p · C_FN > (1−p) · C_FP`, i.e. `p > C_FP/(C_FP + C_FN)` — so 3:1
 gives **0.25**, no tuning required. I grid-searched it on out-of-fold training predictions
-as a check and the grid independently picked 0.25. That agreement is really a calibration
-test: the closed form only works if the probabilities mean what they say.
+as a check and the grid picked 0.22. That near-agreement is really a calibration test: the
+closed form only works if the probabilities mean what they say, and the training run warns if
+the two ever drift more than 0.05 apart.
 
 The threshold is chosen on training folds only. Picking it on the test set would be the
 same error as tuning a hyperparameter there, and it's an easy one to make because
 threshold selection doesn't *feel* like fitting.
 
-### And it didn't reduce cost
+### And it barely reduced cost
 
-At 3:1 the tuned threshold and the old 0.5 default produce the **same** expected cost on
-this split — 0.5606 per play, from genuinely different confusion matrices (157 missed
-blitzes vs. 214). A coincidence, and I only noticed because I printed both.
+At 3:1 the tuned threshold costs 0.5554 per play against the default's 0.5571 {D} a 0.3%
+improvement, which I'd call a wash. (With the random forest I shipped earlier the two were
+*identical* to four decimals, 0.5606 each, from quite different confusion matrices. That was
+coincidence, and I only noticed because I printed both.)
 
-So this didn't make the model cheaper. What it did:
+So this didn't meaningfully make the model cheaper. What it did:
 
 1. The operating point is now a stated decision traceable to an assumption someone can
    argue with, rather than a library default.
@@ -330,6 +335,79 @@ So this didn't make the model cheaper. What it did:
 
 That's three things I can defend, and zero improvement in the headline metric. I think
 that's the normal shape of this kind of work and I'd rather show it than dress it up.
+
+## Shipping the simpler model
+
+The error bars said the random forest and the logistic regression were indistinguishable.
+I sat on that for a while because the random forest was the whole framing of the project,
+and then acted on it: **the shipped model is now the logistic regression.**
+
+The evidence, over 10 by-game splits:
+
+| | Mean ± SD |
+|---|---|
+| Logistic regression AUC | 0.708 ± 0.018 |
+| Random forest AUC | 0.711 ± 0.017 |
+| **Paired difference (forest − linear)** | **+0.0032, SE 0.0033** |
+
+The forest won 6 of 10 splits. That's a tie ± noise, and a tie should go to the model you
+can explain. The other columns aren't close either: **6.9 KB against 7.1 MB**, fourteen
+readable coefficients against 300 trees, and a sane fallback for unseen categories
+(`handle_unknown='ignore'` gives an all-zero block, where the forest split on an arbitrary
+`-1` sentinel).
+
+### The model, in full
+
+That's the payoff. The entire thing fits in a table — numeric features were standardised,
+so these are per standard deviation and comparable to each other:
+
+| Feature | Coefficient | Odds ratio |
+|---|---|---|
+| `defendersInBox` | +0.642 | **1.90** |
+| `down` | +0.200 | 1.22 |
+| `yardsToGo` | −0.173 | 0.84 |
+| `score_differential` | +0.168 | 1.18 |
+| `quarter` | +0.142 | 1.15 |
+| `yards_to_goal` | −0.141 | 0.87 |
+| `is_red_zone` | −0.127 | 0.88 |
+
+Every sign is football-sensible, and I can say what the model believes in a sentence: blitz
+probability rises with defenders in the box, later downs, a bigger score lead and later game
+time; it falls with longer distance-to-go and with distance from the opponent's goal line.
+`defendersInBox` remains the dominant term, as it was under the forest.
+
+The strongest categorical levels are readable too — `personnelD=5 DL, 1 LB, 5 DB` carries
++2.18 (odds ±8.8x), which is a defensive front that is essentially announcing pressure.
+
+### What the swap cost
+
+**Predictions are compressed at the tails.** A linear model cannot express "9 in the box
+*at the goal line*" as an interaction, and it shows:
+
+| Scenario | Linear | Forest |
+|---|---|---|
+| 1st & 10 own 25, 5-man box | 0.047 | 0.147 |
+| 3rd & 8, midfield, 6-man box | 0.121 | 0.270 |
+| 4th & 1 goal-to-go, 9-man box | 0.356 | 0.517 |
+| 3rd & 2, 8-man box, tied Q4 | 0.312 | 0.594 |
+
+Ordering is preserved and the ranking is what AUC measures, which is why the two score the
+same. But the linear model is more conservative, and if the use case cared specifically
+about identifying extreme pressure looks, that compression would matter more than the AUC
+tie suggests.
+
+**Team coefficients are now visible, and a bit alarming.** `defensiveTeam=LV` sits at
+−1.13 and `defensiveTeam=LA` at +0.92. With roughly four games per team, those are the
+most likely thing in this model to be overfit. The forest was presumably doing something
+similar internally — the difference is that now I can see it. I'd count that as an argument
+for the swap rather than against it, but it does mean per-team effects should not be read as
+scouting.
+
+**Cross-version pickling got more fragile.** A bare `RandomForestClassifier` unpickles
+across scikit-learn versions with a warning. A `Pipeline` wrapping a `ColumnTransformer`
+does not — it raises `AttributeError: Can't get attribute '_RemainderColsList'`. The
+artifacts and the serving image are pinned to the same version so this is contained, but it
+made the version discipline load-bearing rather than merely tidy.
 
 ## Trying to ground 3:1 in EPA — and failing
 
@@ -416,13 +494,15 @@ analyst, because "1.1x an average pass play" is more useful than a bare percenta
 
 | Situation | Blitz prob | Lift | Alert? |
 |---|---|---|---|
-| 1st & 10 own 25, 5-man box, opening drive | 14.7% | 0.60x | no |
-| 3rd & 8, midfield, 6-man box | 27.0% | 1.10x | yes |
-| 4th & 1 goal-to-go, 9-man box, late Q4 | 51.7% | 2.10x | yes |
-| 3rd & 2, 8-man box, tied Q4 | 59.4% | 2.41x | yes |
+| 1st & 10 own 25, 5-man box, opening drive | 4.7% | 0.19x | no |
+| 3rd & 15, 4-man box, own territory | 4.7% | 0.19x | no |
+| 3rd & 8, midfield, 6-man box | 12.1% | 0.49x | no |
+| 3rd & 2, 8-man box, tied Q4 | 31.2% | 1.27x | yes |
+| 4th & 1 goal-to-go, 9-man box, late Q4 | 35.6% | 1.45x | yes |
 
-The direction is right across the spectrum and the spread is football-sensible: a heavy
-box on a short third down is ~2.4x more blitz-prone than an opening-drive vanilla look.
+The direction is right across the spectrum: a heavy box on a short down is ~7x more
+blitz-prone than an opening-drive vanilla look, and only the two genuine pressure looks trip
+the alert.
 
 Worth noting that the first three of these used to read 33.1% / 53.1% / 67.7% before
 calibration. Same model, same ranking — but those numbers were inflated by about 2x, and
@@ -440,14 +520,14 @@ them up, and there's a test asserting they don't come back.
 1. **One season, 8 weeks.** Defensive coordinators change scheme between seasons. The model would degrade fast on 2022+ data without retraining.
 2. **No player-tracking features.** The `week*.csv` files contain 10Hz tracking for every player on every play — that's where the next big AUC gains live (defender alignment depth, motion response, walk-up timing). Skipped for scope; it would roughly triple the project size.
 3. **The 3:1 cost ratio is asserted, not measured.** The threshold follows rigorously from it, but the ratio itself is my guess at how an offensive coordinator trades a sack risk against a lost route. The right version measures both sides in EPA from play-by-play data. Until then, the sensitivity table is the honest deliverable and the single chosen row is an assumption.
-4. **A random forest I can't justify.** It ties logistic regression across 10 splits. It's still here because swapping it is a bigger change than this pass allowed, but "we picked the more complex model and it performed identically" is a fair thing to be challenged on.
+4. **Per-team coefficients on ~4 games per team.** Now that a linear model is shipped, `defensiveTeam` effects are visible and some are large (LV −1.13, LA +0.92). Plausibly real coaching tendency, plausibly overfit; I wouldn't present them as scouting. Regularising them (or replacing team identity with a training-set blitz rate) is the fix.
 5. **Personnel strings aren't standardized.** "1 RB, 1 TE, 3 WR" is treated as a categorical token. A better approach would parse it into integer columns (n_rb, n_te, n_wr, n_db).
 
 ## What I'd do next
 
 In order of expected payoff:
 
-1. **Ship the logistic regression** — it matches the random forest across 10 splits and is interpretable. The burden of proof is on the ensemble and it hasn't met it.
+1. **Regularise or replace the team terms** — shrink `possessionTeam`/`defensiveTeam` with a stronger penalty, or swap team identity for a training-set blitz rate, so coaching tendency stops being ~32 free parameters fit on four games each.
 2. **Measure protection intent from the pre-snap tracking data** — backfield alignment in the final pre-snap frame of `week*.csv`, which is what the EPA cost-ratio analysis needed and couldn't get from post-snap role labels.
 3. **Re-aim the label at the tail** — the net EPA cost of an average blitz is only −0.036, so the value is in all-out pressure, not in the mean. A 6+-rusher label on a smaller, more extreme population is probably the more useful model.
 4. **Add team historical blitz rate as a feature** — compute defensive team's training-set blitz rate, join in. Captures coaching tendency without leakage.
@@ -459,7 +539,7 @@ In order of expected payoff:
 ## Stack
 
 - **Data:** NFL Big Data Bowl 2023 (Kaggle)
-- **Modeling:** scikit-learn — RandomForestClassifier, GroupShuffleSplit + GroupKFold
+- **Modeling:** scikit-learn — LogisticRegression in a OneHotEncoder/StandardScaler pipeline (shipped), RandomForestClassifier (challenger), GroupShuffleSplit + GroupKFold
   (by-game splits and out-of-fold predictions), IsotonicRegression (probability
   calibration), LabelEncoder
 - **Serving:** FastAPI + uvicorn on Python 3.11

@@ -59,7 +59,34 @@ def test_health_endpoint(client):
     body = r.json()
     assert body["status"] == "ok"
     assert body["model_loaded"] is True
-    assert body["model"] == "RandomForestClassifier"
+    assert body["model"] == "LogisticRegression"
+
+
+def test_model_info_exposes_readable_coefficients(client):
+    """The point of shipping a linear model: you can read it. defendersInBox should
+    be the strongest numeric driver and should push the odds of a blitz UP."""
+    body = client.get("/model-info").json()
+    coefs = body["coefficients"]["numeric_per_standard_deviation"]
+    assert "defendersInBox" in coefs
+    assert coefs["defendersInBox"]["odds_ratio"] > 1.0
+    # Numeric coefficients are ordered by absolute effect, strongest first.
+    assert next(iter(coefs)) == "defendersInBox"
+
+
+def test_model_info_keeps_the_random_forest_challenger(client):
+    """The 'a tie goes to the simpler model' claim has to stay checkable."""
+    body = client.get("/model-info").json()
+    assert "random_forest_challenger" in body["baseline_comparison"]
+    assert "logistic_regression_shipped" in body["baseline_comparison"]
+
+
+def test_unseen_category_falls_back_to_zero_block(client, sample_play):
+    """Unseen labels encode to -1, and OneHotEncoder(handle_unknown='ignore') turns
+    that into an all-zero block rather than an arbitrary tree split."""
+    weird = {**sample_play, "defensive_team": "ZZZ", "personnel_d": "9 DL, 9 LB, 9 DB"}
+    r = client.post("/predict", json=weird)
+    assert r.status_code == 200
+    assert 0.0 <= r.json()["blitz_probability"] <= 1.0
 
 
 def test_model_info_endpoint(client):
@@ -156,8 +183,27 @@ def test_predict_football_sanity_red_zone_heavy_box(client, sample_play):
         "defenders_in_box": 9,
         "game_clock": "1:45",
     }
-    r = client.post("/predict", json=goal_line)
-    p = r.json()["blitz_probability"]
-    # Not asserting a hard threshold the model might drift past in retraining,
-    # but a 9-man box at the goal line should land above the overall blitz rate (~25%)
-    assert p > 0.4, f"Expected high blitz prob in goal-line/heavy-box situation, got {p}"
+    vanilla = {
+        **sample_play,
+        "quarter": 1,
+        "down": 1,
+        "yards_to_go": 10,
+        "yards_to_goal": 75,
+        "defenders_in_box": 5,
+        "game_clock": "14:20",
+    }
+    heavy = client.post("/predict", json=goal_line).json()
+    light = client.post("/predict", json=vanilla).json()
+
+    # Assert the ordering and the lift, not an absolute probability. The previous
+    # version of this test hard-coded p > 0.4, which was calibrated to the old
+    # *uncalibrated* probabilities (inflated ~2x) and silently became far too strict
+    # once real calibration landed. Relative behaviour is what "football-sensible"
+    # actually means, and it survives recalibration and model swaps.
+    assert heavy["blitz_probability"] > light["blitz_probability"], (
+        f"9-man box at the goal line ({heavy['blitz_probability']}) should beat a "
+        f"5-man box on an opening drive ({light['blitz_probability']})")
+    assert heavy["lift_over_base_rate"] > 1.2, (
+        f"Expected a clear lift over the base rate, got {heavy['lift_over_base_rate']}x")
+    assert heavy["will_blitz"] is True, "goal-line heavy box should trip the alert"
+    assert light["will_blitz"] is False, "vanilla opening drive should not trip the alert"
