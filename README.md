@@ -2,7 +2,7 @@
 
 Pre-snap binary classifier: given the offensive context (down, distance, formation, personnel, score, clock), predict whether the defense will blitz (5+ pass rushers).
 
-> **Honest baseline:** ROC AUC **0.711 ± 0.017** across 10 by-game splits (0.500 = no skill); the shipped model scores 0.689 on its own 25 held-out games. Probabilities are isotonic-calibrated, and the alert threshold is derived from an explicit cost ratio rather than left at 0.5. Blitzes are ~25% of plays, so accuracy is the wrong headline — see [Why not accuracy?](#why-not-accuracy). Trained on 2021 NFL weeks 1–8 from the Big Data Bowl 2023 dataset. Full writeup in [STORY.md](STORY.md).
+> **Honest baseline:** ROC AUC **0.708 ± 0.018** across 10 by-game splits (0.500 = no skill); the shipped model scores 0.682 on its own 25 held-out games. The shipped model is a **logistic regression** — it ties a random forest on AUC, so the tie went to the model you can read ([why](#why-logistic-regression)). Probabilities are isotonic-calibrated, and the alert threshold is derived from an explicit cost ratio rather than left at 0.5. Blitzes are ~25% of plays, so accuracy is the wrong headline — see [Why not accuracy?](#why-not-accuracy). Trained on 2021 NFL weeks 1–8 from the Big Data Bowl 2023 dataset. Full writeup in [STORY.md](STORY.md).
 
 ## Results
 
@@ -12,37 +12,74 @@ tuned decision threshold of 0.25:
 | Model | ROC AUC | Accuracy | Blitz precision | Blitz recall |
 |---|---|---|---|---|
 | Always predict "no blitz" | 0.500 | **0.739** | — | 0.00 |
-| Logistic regression | 0.682 | 0.655 | — | — |
-| **Random forest (shipped)** | **0.689** | 0.619 | 0.37 | 0.66 |
+| Random forest (challenger) | 0.689 | 0.619 | 0.37 | 0.66 |
+| **Logistic regression (shipped)** | **0.682** | 0.634 | 0.38 | 0.64 |
 
 One split of 122 games is a noisy measurement, so the training run repeats the whole
 thing over 10 seeds:
 
 | Metric | Mean ± SD over 10 by-game splits |
 |---|---|
-| Random forest AUC | **0.711 ± 0.017** |
-| Logistic regression AUC | 0.708 ± 0.018 |
-| Random forest accuracy | 0.700 ± 0.017 |
+| **Logistic regression AUC (shipped)** | **0.708 ± 0.018** |
+| Random forest AUC (challenger) | 0.711 ± 0.017 |
+| Logistic regression accuracy | 0.657 ± 0.029 |
 | Majority-class accuracy | 0.755 ± 0.018 |
 
-The spread matters: a single split can land anywhere from 0.683 to 0.736 on identical
+The spread matters: a single split can land anywhere from 0.688 to 0.741 on identical
 code. Any claim resting on a difference smaller than ~0.02 AUC is not measurable here.
+
+### Why logistic regression
+
+The random forest beats it by **+0.0032 AUC, standard error 0.0033**, winning 6 of 10
+splits. That is a tie, not a win. When two models are indistinguishable the tie goes to
+the one you can explain, and the other differences are not close:
+
+| | Logistic regression | Random forest |
+|---|---|---|
+| Artifact size | **6.9 KB** | 7.1 MB |
+| Explanation | 14 numeric coefficients + per-level effects | 300 trees |
+| Unseen category | all-zero block (`handle_unknown='ignore'`) | arbitrary split on a `-1` sentinel |
+
+The whole model is in `/model-info` under `coefficients`. Numeric features were
+standardised, so coefficients are per standard deviation and directly comparable:
+
+| Feature | Coefficient | Odds ratio |
+|---|---|---|
+| `defendersInBox` | +0.642 | **1.90** |
+| `down` | +0.200 | 1.22 |
+| `yardsToGo` | −0.173 | 0.84 |
+| `score_differential` | +0.168 | 1.18 |
+| `quarter` | +0.142 | 1.15 |
+| `yards_to_goal` | −0.141 | 0.87 |
+
+Every sign is football-sensible: more defenders near the line and later downs push blitz
+probability up, longer distance-to-go and being further from the opponent's goal push it
+down. One standard deviation more in the box multiplies the odds of a blitz by ~1.9.
+
+**Two costs of the swap, stated plainly:**
+
+1. **Predictions are less extreme at the tails.** A linear model can't represent "9 in
+   the box *at the goal line*" as an interaction. That scenario reads 0.356 (1.45x base
+   rate) where the forest read 0.517 (2.10x). Ordering is preserved; the spread is
+   compressed.
+2. **Large per-team coefficients on 8 weeks of data.** `defensiveTeam=LV` lands at
+   −1.13 and `defensiveTeam=LA` at +0.92. Those may be real coaching tendencies, but at
+   ~4 games per team they're the most likely thing here to be overfit — and a linear
+   model makes them visible in a way the forest did not.
+
+The random forest is still trained on every run as the challenger, so "it's a tie" stays
+checkable rather than asserted — see `baseline_comparison` in `/model-info`.
 
 ### Why not accuracy?
 
-Because the majority-class model beats us on it — 0.739 vs. 0.619 — and it has no
+Because the majority-class model beats us on it — 0.739 vs. 0.634 — and it has no
 predictive value whatsoever. Any classifier on a 26% base rate can score 74% by
 refusing to ever predict the positive class.
 
 Accuracy drops further once the threshold is tuned, and that's the intended trade: the
 model is an **alert**, and a missed blitz costs more than a false alarm. At the tuned
-threshold it catches **66% of actual blitzes**, and when it fires it's right **37%** of
+threshold it catches **64% of actual blitzes**, and when it fires it's right **38%** of
 the time against a 26.1% base rate. See [The decision rule](#the-decision-rule).
-
-The random forest also beats logistic regression by only **+0.003 ± 0.010 AUC**, winning
-6 of 10 seeds. That's a coin flip. Most of the signal here is linear and the ensemble is
-not earning its complexity — the honest recommendation would be to ship the logistic
-regression and hand a coach the coefficients.
 
 ## The decision rule
 
@@ -62,24 +99,25 @@ operating point moves if you disagree:
 
 | FN:FP cost | Threshold | Blitz precision | Blitz recall | Alert rate |
 |---|---|---|---|---|
-| 1:1 | 0.50 | 0.56 | 0.22 | 0.10 |
-| 2:1 | 0.33 | 0.48 | 0.44 | 0.24 |
-| **3:1 (shipped)** | **0.25** | **0.37** | **0.66** | **0.46** |
-| 5:1 | 0.17 | 0.32 | 0.82 | 0.67 |
-| 8:1 | 0.11 | 0.28 | 0.95 | 0.89 |
+| 1:1 | 0.50 | 0.63 | 0.09 | 0.04 |
+| 2:1 | 0.33 | 0.50 | 0.33 | 0.17 |
+| **3:1 (shipped)** | **0.25** | **0.38** | **0.64** | **0.44** |
+| 5:1 | 0.17 | 0.32 | 0.81 | 0.66 |
+| 8:1 | 0.11 | 0.29 | 0.90 | 0.81 |
 
 For calibrated probabilities the cost-optimal cutoff has a closed form —
 `C_FP / (C_FP + C_FN)`, so 1/(1+3) = **0.25**. A grid search over out-of-fold training
-predictions independently picked 0.25, which is the check that the calibration is real.
+predictions independently picked **0.22** — close enough to confirm the calibration is
+doing its job, and the small gap is why the training run warns if the two ever diverge by
+more than 0.05.
 
 The threshold is chosen on **out-of-fold training predictions only** (`GroupKFold`
 within the training games). Tuning it on the test set would be the same mistake as
 tuning a hyperparameter there.
 
-Honest caveat: at 3:1 the tuned threshold and the old default happen to produce the
-*same* expected cost on this split (0.5606 per play, from very different confusion
-matrices — 157 vs. 214 missed blitzes). So this didn't make the model cheaper. What it
-did was make the operating point a stated choice that moves correctly when the cost
+The tuned threshold is slightly cheaper than the default here — 0.5554 vs. 0.5571 cost
+per play — but the gap is small enough to call a wash. The point isn't the saving. It's
+that the operating point is now a stated choice that moves correctly when the cost
 assumption changes, instead of an accident of sklearn's default.
 
 ### Can the cost ratio be measured?
@@ -110,27 +148,31 @@ Identifying the ratio needs pre-snap protection *intent*, which means the unused
 ## Calibration
 
 `class_weight='balanced'` makes the raw probabilities unusable as probabilities. The
-uncalibrated model predicted a mean blitz probability of **0.434** on a test set whose
+uncalibrated model predicted a mean blitz probability of **0.440** on a test set whose
 actual rate was **0.261** — it was overstating blitz risk by roughly 2×.
 
 Fixed with isotonic regression fit on out-of-fold training predictions:
 
 | | Brier score | Mean predicted | Observed |
 |---|---|---|---|
-| Raw | 0.2057 | 0.434 | 0.261 |
-| **Isotonic (shipped)** | **0.1752** | **0.247** | 0.261 |
+| Raw | 0.2148 | 0.440 | 0.261 |
+| **Isotonic (shipped)** | **0.1766** | **0.234** | 0.261 |
 
-14.8% better Brier. Isotonic is monotone, so AUC is unchanged — this fixes what the
+17.8% better Brier. Isotonic is monotone, so AUC is unchanged — this fixes what the
 numbers *mean*, not how well they rank. Reliability after calibration, from
 `/model-info`:
 
 | Predicted bucket | n | Mean predicted | Observed rate |
 |---|---|---|---|
-| 0.00–0.15 | 511 | 0.100 | 0.137 |
-| 0.15–0.25 | 430 | 0.205 | 0.202 |
-| 0.25–0.35 | 612 | 0.294 | 0.307 |
-| 0.45–0.60 | 153 | 0.517 | 0.542 |
-| 0.60–1.00 | 40 | 0.811 | 0.650 |
+| 0.00–0.15 | 579 | 0.102 | 0.147 |
+| 0.15–0.25 | 407 | 0.202 | 0.199 |
+| 0.25–0.35 | 462 | 0.299 | 0.299 |
+| 0.35–0.45 | 217 | 0.368 | 0.465 |
+| 0.45–0.60 | 69 | 0.539 | 0.551 |
+| 0.60–1.00 | 16 | 0.752 | 0.813 |
+
+The 0.35–0.45 bucket is the one visibly off (0.368 predicted vs 0.465 observed, n=217).
+Isotonic fixes the overall level, not every local wobble.
 
 The API serves calibrated probabilities. `blitz_calibrator.joblib` is a separate
 artifact so the two stages stay inspectable.
@@ -138,7 +180,7 @@ artifact so the two stages stay inspectable.
 Built in the same train-once / serve-many pattern as `titanic-ml-project`:
 - `training/` — Jupyter + full ML stack; produces `.joblib` artifacts.
 - `serving/` — Slim FastAPI image; loads artifacts and exposes a REST API.
-- `tests/` — pytest unit + smoke tests (40 tests, runs in ~5s).
+- `tests/` — pytest unit + smoke tests (43 tests, runs in ~5s).
 
 ## Get the data
 
@@ -202,11 +244,15 @@ stability seed, so it takes a few minutes rather than seconds.
 
 ### Pull from Docker Hub (fastest)
 ```powershell
-docker pull kenjaro/nfl-blitz-predictor:latest   # currently 0.2.0
+docker pull kenjaro/nfl-blitz-predictor:latest   # currently 0.3.0
 docker run -p 8000:8000 kenjaro/nfl-blitz-predictor:latest
 ```
 
-> **0.2.0 is a breaking change from 0.1.0.** The request field `absolute_yardline_number`
+> **0.3.0** keeps 0.2.0's request/response contract but ships a logistic regression in
+> place of the random forest, so probabilities shift (usually down) for a given play — see
+> [Why logistic regression](#why-logistic-regression).
+>
+> **0.2.0 was a breaking change from 0.1.0.** The request field `absolute_yardline_number`
 > became `yards_to_goal` (and means something different — see the model card), the
 > `confidence` and `num_pass_rushers_estimate` response fields were removed, and
 > probabilities are now calibrated, so the same play returns a materially lower and more
@@ -256,26 +302,29 @@ curl -X POST http://localhost:8000/predict \
 Response:
 ```json
 {
-  "blitz_probability": 0.2704,
-  "will_blitz": true,
+  "blitz_probability": 0.1206,
+  "will_blitz": false,
   "decision_threshold": 0.25,
   "cost_ratio_fn_to_fp": 3.0,
   "base_rate": 0.246,
-  "lift_over_base_rate": 1.1,
-  "recommendation": "Blitz probability 27% is at or above the 25% alert threshold (tuned for a 3:1 cost on missed blitzes). Favor extra protection."
+  "lift_over_base_rate": 0.49,
+  "recommendation": "Blitz probability 12% is below the 25% alert threshold. Standard protection."
 }
 ```
 
-Note that `will_blitz: true` at a probability of 0.27 is not a contradiction — it's an
-alert flag at the 0.25 threshold, not a claim that a blitz is more likely than not. The
-`lift_over_base_rate` of 1.1 is the honest read: this situation is barely more
-blitz-prone than an average pass play.
+`lift_over_base_rate` is the number to read: 0.49 means this situation is about **half as
+blitz-prone as an average pass play**, so the alert correctly stays off. `will_blitz` is an
+alert flag at the 0.25 threshold, not a claim about which outcome is more likely — it can
+be `true` at a probability well under 0.5, because a missed blitz is assumed 3x costlier
+than a false alarm.
 
-(Before calibration this same request returned 0.53, which was inflated by about 2x.)
+For reference, this same request returned **0.53** before calibration (inflated ~2x) and
+**0.27** from the random forest. The logistic regression reads this particular spot lower;
+see the tail-compression caveat under [Why logistic regression](#why-logistic-regression).
 
 ## Tests
 
-40 tests covering feature engineering, label construction, the yardline derivation, API validation, calibration, threshold behavior, and football-sanity predictions.
+43 tests covering feature engineering, label construction, the yardline derivation, API validation, calibration, threshold behavior, coefficient exposure, and football-sanity predictions.
 
 ```powershell
 # In the training container (has all deps)
@@ -304,13 +353,13 @@ python -m pytest tests/ -v
 | Group | Features |
 |---|---|
 | Situational | `quarter`, `down`, `yardsToGo`, `yards_to_goal`, `score_differential`, `game_seconds_remaining`, `half_seconds_remaining`, `is_two_minute`, `is_red_zone`, `is_goal_to_go` |
-| Pre-snap box | `defendersInBox` (most important feature, ~19% of total importance) |
+| Pre-snap box | `defendersInBox` (strongest coefficient: +0.64 per SD, odds ratio 1.90) |
 | Teams | `possessionTeam`, `defensiveTeam`, `is_home_offense` |
 | Pre-snap look | `offenseFormation`, `personnelO`, `personnelD` |
 
 ## Model card (baseline)
 
-- **Algorithm:** RandomForestClassifier (300 trees, max_depth=15, min_samples_leaf=20, class_weight='balanced')
+- **Algorithm:** `OneHotEncoder(categoricals) + StandardScaler(numerics) -> LogisticRegression(class_weight='balanced', max_iter=1000)`, wrapped in an isotonic calibrator. A RandomForestClassifier (300 trees, max_depth=15, min_samples_leaf=20) is trained every run as the challenger; it ties on AUC and is not shipped.
 - **Label definition:** blitz = 5 or more defenders with `pff_role == 'Pass Rush'`
 - **Data:** 2021 NFL regular season, weeks 1–8 (8,549 labeled pass plays; 24.6% blitz rate)
 - **Train/test split:** `GroupShuffleSplit` by `gameId`, 80/20, random_state=42 — 97 train

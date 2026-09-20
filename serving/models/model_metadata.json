@@ -1,5 +1,590 @@
 {
-  "model_type": "RandomForestClassifier",
+  "model_type": "LogisticRegression",
+  "model_pipeline": "OneHotEncoder(categoricals) + StandardScaler(numerics) -> LogisticRegression(class_weight='balanced')",
+  "model_selection_note": "Logistic regression is shipped over the random forest because the two are statistically indistinguishable on AUC across the by-game splits in 'stability', and a tie goes to the interpretable model. See 'coefficients' and baseline_comparison.random_forest_challenger.",
+  "coefficients": {
+    "note": "Numeric coefficients are per standard deviation (features were standardised) so they are comparable. odds_ratio = exp(coefficient).",
+    "numeric_per_standard_deviation": {
+      "defendersInBox": {
+        "coefficient": 0.6419,
+        "odds_ratio": 1.9001
+      },
+      "down": {
+        "coefficient": 0.2,
+        "odds_ratio": 1.2214
+      },
+      "yardsToGo": {
+        "coefficient": -0.1735,
+        "odds_ratio": 0.8407
+      },
+      "score_differential": {
+        "coefficient": 0.1679,
+        "odds_ratio": 1.1828
+      },
+      "quarter": {
+        "coefficient": 0.1422,
+        "odds_ratio": 1.1528
+      },
+      "yards_to_goal": {
+        "coefficient": -0.1412,
+        "odds_ratio": 0.8683
+      },
+      "is_red_zone": {
+        "coefficient": -0.1269,
+        "odds_ratio": 0.8808
+      },
+      "game_seconds_remaining": {
+        "coefficient": 0.1105,
+        "odds_ratio": 1.1168
+      },
+      "is_goal_to_go": {
+        "coefficient": -0.0737,
+        "odds_ratio": 0.9289
+      },
+      "half_seconds_remaining": {
+        "coefficient": 0.0639,
+        "odds_ratio": 1.066
+      },
+      "is_two_minute": {
+        "coefficient": -0.0602,
+        "odds_ratio": 0.9416
+      },
+      "preSnapHomeScore": {
+        "coefficient": 0.0302,
+        "odds_ratio": 1.0307
+      },
+      "is_home_offense": {
+        "coefficient": -0.0227,
+        "odds_ratio": 0.9776
+      },
+      "preSnapVisitorScore": {
+        "coefficient": 0.0131,
+        "odds_ratio": 1.0132
+      }
+    },
+    "categorical_by_absolute_effect": {
+      "personnelD=5 DL, 1 LB, 5 DB": {
+        "coefficient": 2.177,
+        "odds_ratio": 8.8196
+      },
+      "defensiveTeam=LV": {
+        "coefficient": -1.1271,
+        "odds_ratio": 0.324
+      },
+      "personnelD=2 DL, 2 LB, 7 DB": {
+        "coefficient": -1.0726,
+        "odds_ratio": 0.3421
+      },
+      "personnelD=1 DL, 3 LB, 7 DB": {
+        "coefficient": -1.0639,
+        "odds_ratio": 0.3451
+      },
+      "personnelD=5 DL, 2 LB, 4 DB": {
+        "coefficient": 1.0427,
+        "odds_ratio": 2.8369
+      },
+      "personnelO=2 QB, 2 RB, 0 TE, 2 WR": {
+        "coefficient": 1.0295,
+        "odds_ratio": 2.7997
+      },
+      "personnelO=1 RB, 1 TE, 2 WR,1 LB": {
+        "coefficient": -0.9775,
+        "odds_ratio": 0.3762
+      },
+      "possessionTeam=KC": {
+        "coefficient": -0.9547,
+        "odds_ratio": 0.3849
+      },
+      "defensiveTeam=LA": {
+        "coefficient": 0.9234,
+        "odds_ratio": 2.5179
+      },
+      "defensiveTeam=DEN": {
+        "coefficient": 0.829,
+        "odds_ratio": 2.2911
+      },
+      "personnelO=2 QB, 1 RB, 2 TE, 1 WR": {
+        "coefficient": -0.7935,
+        "odds_ratio": 0.4522
+      },
+      "possessionTeam=BUF": {
+        "coefficient": -0.7796,
+        "odds_ratio": 0.4586
+      },
+      "personnelO=2 RB, 3 TE, 0 WR": {
+        "coefficient": -0.7753,
+        "odds_ratio": 0.4606
+      },
+      "personnelO=6 OL, 2 RB, 0 TE, 2 WR": {
+        "coefficient": -0.754,
+        "odds_ratio": 0.4705
+      },
+      "defensiveTeam=CIN": {
+        "coefficient": -0.7375,
+        "odds_ratio": 0.4783
+      },
+      "possessionTeam=ARI": {
+        "coefficient": -0.735,
+        "odds_ratio": 0.4795
+      },
+      "personnelO=0 RB, 3 TE, 2 WR": {
+        "coefficient": 0.7228,
+        "odds_ratio": 2.0603
+      },
+      "personnelD=3 DL, 1 LB, 7 DB": {
+        "coefficient": 0.7043,
+        "odds_ratio": 2.0225
+      },
+      "personnelO=0 RB, 0 TE, 5 WR": {
+        "coefficient": -0.7038,
+        "odds_ratio": 0.4947
+      },
+      "personnelD=2 DL, 4 LB, 5 DB": {
+        "coefficient": -0.687,
+        "odds_ratio": 0.5031
+      },
+      "defensiveTeam=MIA": {
+        "coefficient": 0.682,
+        "odds_ratio": 1.9778
+      },
+      "defensiveTeam=HOU": {
+        "coefficient": -0.6711,
+        "odds_ratio": 0.5112
+      },
+      "personnelO=3 RB, 0 TE, 2 WR": {
+        "coefficient": -0.666,
+        "odds_ratio": 0.5138
+      },
+      "defensiveTeam=BAL": {
+        "coefficient": 0.6607,
+        "odds_ratio": 1.9362
+      },
+      "possessionTeam=CHI": {
+        "coefficient": 0.6238,
+        "odds_ratio": 1.866
+      },
+      "defensiveTeam=BUF": {
+        "coefficient": -0.6197,
+        "odds_ratio": 0.5381
+      },
+      "personnelO=2 QB, 6 OL, 1 RB, 1 TE, 1 WR": {
+        "coefficient": 0.6058,
+        "odds_ratio": 1.8328
+      },
+      "personnelO=6 OL, 1 RB, 0 TE, 3 WR": {
+        "coefficient": 0.5735,
+        "odds_ratio": 1.7744
+      },
+      "personnelO=2 QB, 1 RB, 1 TE, 2 WR": {
+        "coefficient": 0.5661,
+        "odds_ratio": 1.7613
+      },
+      "personnelO=6 OL, 1 RB, 3 TE, 0 WR": {
+        "coefficient": 0.5621,
+        "odds_ratio": 1.7543
+      },
+      "possessionTeam=BAL": {
+        "coefficient": 0.5427,
+        "odds_ratio": 1.7206
+      },
+      "defensiveTeam=IND": {
+        "coefficient": -0.5421,
+        "odds_ratio": 0.5815
+      },
+      "personnelO=0 RB, 1 TE, 4 WR": {
+        "coefficient": -0.5304,
+        "odds_ratio": 0.5884
+      },
+      "offenseFormation=WILDCAT": {
+        "coefficient": -0.5273,
+        "odds_ratio": 0.5902
+      },
+      "personnelD=6 DL, 2 LB, 3 DB": {
+        "coefficient": 0.5109,
+        "odds_ratio": 1.6667
+      },
+      "personnelO=2 QB, 1 RB, 3 TE, 0 WR": {
+        "coefficient": -0.4641,
+        "odds_ratio": 0.6287
+      },
+      "possessionTeam=MIA": {
+        "coefficient": 0.4537,
+        "odds_ratio": 1.5741
+      },
+      "possessionTeam=TB": {
+        "coefficient": -0.4481,
+        "odds_ratio": 0.6388
+      },
+      "offenseFormation=JUMBO": {
+        "coefficient": 0.446,
+        "odds_ratio": 1.562
+      },
+      "personnelD=3 DL, 3 LB, 5 DB": {
+        "coefficient": -0.4459,
+        "odds_ratio": 0.6403
+      },
+      "personnelO=6 OL, 2 RB, 2 TE, 0 WR": {
+        "coefficient": 0.4447,
+        "odds_ratio": 1.5601
+      },
+      "possessionTeam=DAL": {
+        "coefficient": 0.4386,
+        "odds_ratio": 1.5506
+      },
+      "personnelD=5 DL, 3 LB, 3 DB": {
+        "coefficient": 0.4205,
+        "odds_ratio": 1.5227
+      },
+      "personnelD=2 DL, 3 LB, 6 DB": {
+        "coefficient": -0.4175,
+        "odds_ratio": 0.6587
+      },
+      "defensiveTeam=TB": {
+        "coefficient": 0.4089,
+        "odds_ratio": 1.5052
+      },
+      "defensiveTeam=LAC": {
+        "coefficient": 0.4048,
+        "odds_ratio": 1.499
+      },
+      "personnelO=2 RB, 2 TE, 1 WR": {
+        "coefficient": -0.3988,
+        "odds_ratio": 0.6711
+      },
+      "personnelD=0 DL, 5 LB, 6 DB": {
+        "coefficient": -0.3749,
+        "odds_ratio": 0.6874
+      },
+      "defensiveTeam=CAR": {
+        "coefficient": 0.3568,
+        "odds_ratio": 1.4287
+      },
+      "defensiveTeam=CLE": {
+        "coefficient": -0.3553,
+        "odds_ratio": 0.701
+      },
+      "personnelO=1 RB, 1 TE, 3 WR": {
+        "coefficient": 0.3423,
+        "odds_ratio": 1.4082
+      },
+      "defensiveTeam=ARI": {
+        "coefficient": 0.3411,
+        "odds_ratio": 1.4065
+      },
+      "possessionTeam=SF": {
+        "coefficient": -0.3349,
+        "odds_ratio": 0.7154
+      },
+      "possessionTeam=SEA": {
+        "coefficient": 0.3291,
+        "odds_ratio": 1.3897
+      },
+      "personnelO=7 OL, 1 RB, 0 TE, 2 WR": {
+        "coefficient": -0.3287,
+        "odds_ratio": 0.7199
+      },
+      "personnelD=1 DL, 5 LB, 5 DB": {
+        "coefficient": -0.3257,
+        "odds_ratio": 0.722
+      },
+      "possessionTeam=NE": {
+        "coefficient": 0.3254,
+        "odds_ratio": 1.3846
+      },
+      "personnelO=6 OL, 1 RB, 1 TE, 2 WR": {
+        "coefficient": 0.3207,
+        "odds_ratio": 1.3781
+      },
+      "personnelO=2 QB, 1 RB, 0 TE, 3 WR": {
+        "coefficient": 0.318,
+        "odds_ratio": 1.3743
+      },
+      "personnelD=4 DL, 1 LB, 6 DB": {
+        "coefficient": 0.3175,
+        "odds_ratio": 1.3736
+      },
+      "personnelD=1 DL, 4 LB, 6 DB": {
+        "coefficient": -0.3169,
+        "odds_ratio": 0.7284
+      },
+      "possessionTeam=HOU": {
+        "coefficient": 0.3054,
+        "odds_ratio": 1.3572
+      },
+      "possessionTeam=CAR": {
+        "coefficient": 0.3023,
+        "odds_ratio": 1.353
+      },
+      "personnelO=6 OL, 2 RB, 1 TE, 1 WR": {
+        "coefficient": 0.2926,
+        "odds_ratio": 1.3399
+      },
+      "offenseFormation=PISTOL": {
+        "coefficient": -0.2867,
+        "odds_ratio": 0.7507
+      },
+      "personnelO=1 RB, 4 TE, 0 WR": {
+        "coefficient": 0.2854,
+        "odds_ratio": 1.3303
+      },
+      "personnelD=6 DL, 4 LB, 1 DB": {
+        "coefficient": 0.2854,
+        "odds_ratio": 1.3303
+      },
+      "personnelD=0 DL, 3 LB, 8 DB": {
+        "coefficient": -0.2677,
+        "odds_ratio": 0.7652
+      },
+      "personnelD=6 DL, 3 LB, 2 DB": {
+        "coefficient": -0.2656,
+        "odds_ratio": 0.7667
+      },
+      "defensiveTeam=NO": {
+        "coefficient": -0.2473,
+        "odds_ratio": 0.7809
+      },
+      "possessionTeam=DET": {
+        "coefficient": -0.244,
+        "odds_ratio": 0.7835
+      },
+      "defensiveTeam=KC": {
+        "coefficient": 0.2409,
+        "odds_ratio": 1.2724
+      },
+      "personnelD=4 DL, 2 LB, 5 DB": {
+        "coefficient": -0.2389,
+        "odds_ratio": 0.7875
+      },
+      "possessionTeam=TEN": {
+        "coefficient": 0.2353,
+        "odds_ratio": 1.2653
+      },
+      "possessionTeam=LA": {
+        "coefficient": 0.2253,
+        "odds_ratio": 1.2527
+      },
+      "possessionTeam=CLE": {
+        "coefficient": -0.2222,
+        "odds_ratio": 0.8008
+      },
+      "possessionTeam=JAX": {
+        "coefficient": 0.2129,
+        "odds_ratio": 1.2373
+      },
+      "defensiveTeam=CHI": {
+        "coefficient": -0.2078,
+        "odds_ratio": 0.8124
+      },
+      "defensiveTeam=WAS": {
+        "coefficient": 0.2016,
+        "odds_ratio": 1.2234
+      },
+      "offenseFormation=I_FORM": {
+        "coefficient": 0.1893,
+        "odds_ratio": 1.2084
+      },
+      "personnelD=2 DL, 5 LB, 4 DB": {
+        "coefficient": -0.1772,
+        "odds_ratio": 0.8376
+      },
+      "defensiveTeam=NYG": {
+        "coefficient": -0.1755,
+        "odds_ratio": 0.839
+      },
+      "defensiveTeam=MIN": {
+        "coefficient": -0.1748,
+        "odds_ratio": 0.8397
+      },
+      "possessionTeam=MIN": {
+        "coefficient": -0.1736,
+        "odds_ratio": 0.8406
+      },
+      "personnelO=2 QB, 2 RB, 1 TE, 1 WR": {
+        "coefficient": -0.1717,
+        "odds_ratio": 0.8422
+      },
+      "personnelO=2 RB, 0 TE, 3 WR": {
+        "coefficient": -0.1684,
+        "odds_ratio": 0.845
+      },
+      "defensiveTeam=PHI": {
+        "coefficient": -0.1616,
+        "odds_ratio": 0.8508
+      },
+      "defensiveTeam=PIT": {
+        "coefficient": 0.1611,
+        "odds_ratio": 1.1748
+      },
+      "personnelO=1 RB, 2 TE, 2 WR": {
+        "coefficient": 0.1581,
+        "odds_ratio": 1.1713
+      },
+      "personnelO=1 RB, 0 TE, 4 WR": {
+        "coefficient": 0.1573,
+        "odds_ratio": 1.1704
+      },
+      "possessionTeam=CIN": {
+        "coefficient": 0.1545,
+        "odds_ratio": 1.1671
+      },
+      "possessionTeam=LAC": {
+        "coefficient": -0.1544,
+        "odds_ratio": 0.857
+      },
+      "defensiveTeam=GB": {
+        "coefficient": -0.1541,
+        "odds_ratio": 0.8572
+      },
+      "possessionTeam=NO": {
+        "coefficient": -0.15,
+        "odds_ratio": 0.8607
+      },
+      "possessionTeam=GB": {
+        "coefficient": -0.1484,
+        "odds_ratio": 0.8621
+      },
+      "possessionTeam=IND": {
+        "coefficient": 0.1434,
+        "odds_ratio": 1.1542
+      },
+      "personnelD=3 DL, 4 LB, 4 DB": {
+        "coefficient": -0.1417,
+        "odds_ratio": 0.8679
+      },
+      "possessionTeam=LV": {
+        "coefficient": -0.1361,
+        "odds_ratio": 0.8727
+      },
+      "possessionTeam=PIT": {
+        "coefficient": -0.1283,
+        "odds_ratio": 0.8796
+      },
+      "personnelO=2 RB, 1 TE, 2 WR": {
+        "coefficient": 0.1236,
+        "odds_ratio": 1.1316
+      },
+      "personnelO=0 RB, 2 TE, 3 WR": {
+        "coefficient": 0.1213,
+        "odds_ratio": 1.1289
+      },
+      "personnelD=4 DL, 4 LB, 3 DB": {
+        "coefficient": 0.1185,
+        "odds_ratio": 1.1258
+      },
+      "personnelD=4 DL, 3 LB, 4 DB": {
+        "coefficient": -0.0999,
+        "odds_ratio": 0.9049
+      },
+      "defensiveTeam=SF": {
+        "coefficient": -0.0993,
+        "odds_ratio": 0.9055
+      },
+      "personnelD=5 DL, 5 LB, 1 DB": {
+        "coefficient": 0.0954,
+        "odds_ratio": 1.1001
+      },
+      "defensiveTeam=JAX": {
+        "coefficient": 0.0948,
+        "odds_ratio": 1.0994
+      },
+      "defensiveTeam=SEA": {
+        "coefficient": -0.093,
+        "odds_ratio": 0.9112
+      },
+      "personnelD=1 DL, 2 LB, 8 DB": {
+        "coefficient": -0.0923,
+        "odds_ratio": 0.9118
+      },
+      "defensiveTeam=TEN": {
+        "coefficient": 0.092,
+        "odds_ratio": 1.0963
+      },
+      "possessionTeam=NYG": {
+        "coefficient": 0.0906,
+        "odds_ratio": 1.0949
+      },
+      "possessionTeam=NYJ": {
+        "coefficient": 0.0808,
+        "odds_ratio": 1.0841
+      },
+      "defensiveTeam=ATL": {
+        "coefficient": -0.0751,
+        "odds_ratio": 0.9276
+      },
+      "personnelD=4 DL, 5 LB, 2 DB": {
+        "coefficient": 0.0686,
+        "odds_ratio": 1.071
+      },
+      "possessionTeam=ATL": {
+        "coefficient": 0.0668,
+        "odds_ratio": 1.0691
+      },
+      "offenseFormation=EMPTY": {
+        "coefficient": 0.0639,
+        "odds_ratio": 1.066
+      },
+      "defensiveTeam=NYJ": {
+        "coefficient": 0.0633,
+        "odds_ratio": 1.0654
+      },
+      "personnelO=6 OL, 1 RB, 2 TE, 1 WR": {
+        "coefficient": 0.0586,
+        "odds_ratio": 1.0604
+      },
+      "personnelD=4 DL, 6 LB, 1 DB": {
+        "coefficient": 0.0541,
+        "odds_ratio": 1.0556
+      },
+      "possessionTeam=WAS": {
+        "coefficient": -0.0512,
+        "odds_ratio": 0.9501
+      },
+      "personnelO=1 RB, 3 TE, 1 WR": {
+        "coefficient": -0.0505,
+        "odds_ratio": 0.9508
+      },
+      "personnelD=3 DL, 2 LB, 6 DB": {
+        "coefficient": 0.05,
+        "odds_ratio": 1.0512
+      },
+      "defensiveTeam=DAL": {
+        "coefficient": -0.0445,
+        "odds_ratio": 0.9565
+      },
+      "defensiveTeam=DET": {
+        "coefficient": -0.044,
+        "odds_ratio": 0.957
+      },
+      "defensiveTeam=NE": {
+        "coefficient": -0.0314,
+        "odds_ratio": 0.9691
+      },
+      "personnelD=6 DL, 1 LB, 4 DB": {
+        "coefficient": 0.0263,
+        "odds_ratio": 1.0266
+      },
+      "possessionTeam=DEN": {
+        "coefficient": 0.0206,
+        "odds_ratio": 1.0208
+      },
+      "personnelD=3 DL, 5 LB, 3 DB": {
+        "coefficient": 0.0162,
+        "odds_ratio": 1.0164
+      },
+      "offenseFormation=SHOTGUN": {
+        "coefficient": 0.0109,
+        "odds_ratio": 1.011
+      },
+      "possessionTeam=PHI": {
+        "coefficient": 0.0089,
+        "odds_ratio": 1.0089
+      },
+      "offenseFormation=SINGLEBACK": {
+        "coefficient": 0.0037,
+        "odds_ratio": 1.0037
+      }
+    }
+  },
   "target": "was_blitz",
   "blitz_definition": ">=5 pass rushers (pff_role == 'Pass Rush')",
   "feature_order": [
@@ -47,38 +632,38 @@
     "is_goal_to_go"
   ],
   "metrics": {
-    "roc_auc": 0.6892455733615337,
-    "accuracy": 0.6188571428571429,
+    "roc_auc": 0.6819446704086337,
+    "accuracy": 0.6342857142857142,
     "majority_class_accuracy": 0.7394285714285714,
-    "blitz_precision": 0.3695920889987639,
-    "blitz_recall": 0.6557017543859649,
-    "blitz_f1": 0.4727272727272727,
+    "blitz_precision": 0.3795811518324607,
+    "blitz_recall": 0.6359649122807017,
+    "blitz_f1": 0.47540983606557374,
     "train_size": 6799,
     "test_size": 1750,
     "blitz_rate": 0.24599368347175107,
     "test_blitz_rate": 0.26057142857142856,
     "confusion_matrix": [
       [
-        784,
-        510
+        820,
+        474
       ],
       [
-        157,
-        299
+        166,
+        290
       ]
     ],
     "confusion_matrix_at_default_0.50": [
       [
-        955,
-        339
+        877,
+        417
       ],
       [
-        214,
-        242
+        186,
+        270
       ]
     ],
-    "brier_raw": 0.20571837871698562,
-    "brier_calibrated": 0.17517595994555457,
+    "brier_raw": 0.21483564804032967,
+    "brier_calibrated": 0.1765523362286027,
     "primary_metric": "roc_auc",
     "accuracy_note": "Accuracy is below the majority-class floor by design: the decision threshold is tuned to a 3:1 cost on missed blitzes, which buys recall with accuracy. Use roc_auc, the blitz-class precision/recall, and expected cost per play instead."
   },
@@ -86,134 +671,134 @@
     "threshold": 0.25,
     "cost_false_negative": 3.0,
     "cost_false_positive": 1.0,
-    "threshold_source": "Closed form C_FP/(C_FP+C_FN) on isotonic-calibrated probabilities, cross-checked against a grid search on out-of-fold training predictions (grid picked 0.25).",
-    "grid_threshold_on_out_of_fold": 0.25,
+    "threshold_source": "Closed form C_FP/(C_FP+C_FN) on isotonic-calibrated probabilities, cross-checked against a grid search on out-of-fold training predictions (grid picked 0.22).",
+    "grid_threshold_on_out_of_fold": 0.22,
     "rationale": "Consumer is an offensive analyst deciding whether to keep extra protection in. A missed blitz gives up a free rusher; a false alarm costs one route runner. 3:1 is an ASSUMPTION, not a measurement -- see cost_ratio_sensitivity for how the operating point moves.",
     "cost_ratio_provenance": "Asserted, not measured. analyze_cost_ratio.py attempts to derive it from EPA and fails to identify it (pff_role is post-snap, so 'extra blocker' marks max-protect play design rather than a protection call; the false-alarm cost comes out wrong-signed). That analysis does show a sack costs ~2.06 EPA and a blitz adds 2.7pp of sack risk, but the net EPA effect of a blitz is only ~-0.036 (95% CI -0.094 to +0.025), which bounds what any blitz warning can be worth. See models/cost_ratio_analysis.json.",
     "cost_ratio_sensitivity": [
       {
         "cost_ratio_fn_to_fp": 1,
         "threshold": 0.5,
-        "blitz_precision": 0.5642,
-        "blitz_recall": 0.2215,
-        "alert_rate": 0.1023
+        "blitz_precision": 0.629,
+        "blitz_recall": 0.0855,
+        "alert_rate": 0.0354
       },
       {
         "cost_ratio_fn_to_fp": 2,
         "threshold": 0.3333,
-        "blitz_precision": 0.4843,
-        "blitz_recall": 0.4408,
-        "alert_rate": 0.2371
+        "blitz_precision": 0.5033,
+        "blitz_recall": 0.3333,
+        "alert_rate": 0.1726
       },
       {
         "cost_ratio_fn_to_fp": 3,
         "threshold": 0.25,
-        "blitz_precision": 0.3696,
-        "blitz_recall": 0.6557,
-        "alert_rate": 0.4623
+        "blitz_precision": 0.3796,
+        "blitz_recall": 0.636,
+        "alert_rate": 0.4366
       },
       {
         "cost_ratio_fn_to_fp": 5,
         "threshold": 0.1667,
-        "blitz_precision": 0.3174,
-        "blitz_recall": 0.818,
-        "alert_rate": 0.6714
+        "blitz_precision": 0.3186,
+        "blitz_recall": 0.807,
+        "alert_rate": 0.66
       },
       {
         "cost_ratio_fn_to_fp": 8,
         "threshold": 0.1111,
-        "blitz_precision": 0.2785,
-        "blitz_recall": 0.9539,
-        "alert_rate": 0.8926
+        "blitz_precision": 0.2887,
+        "blitz_recall": 0.8991,
+        "alert_rate": 0.8114
       }
     ],
     "expected_cost_per_play": {
       "always_no_blitz": 0.7817,
       "always_blitz": 0.7394,
-      "raw_probability_at_0.50": 0.5606,
-      "calibrated_at_tuned_threshold": 0.5606
+      "raw_probability_at_0.50": 0.5571,
+      "calibrated_at_tuned_threshold": 0.5554
     }
   },
   "calibration": {
     "method": "IsotonicRegression fit on out-of-fold training predictions",
     "artifact": "blitz_calibrator.joblib",
-    "brier_raw": 0.20571837871698562,
-    "brier_calibrated": 0.17517595994555457,
-    "note": "class_weight='balanced' inflates raw probabilities -- the uncalibrated model predicted a mean of 0.434 against an observed rate of 0.261. Serve calibrated probabilities; isotonic is monotone so ranking (AUC) is unchanged.",
+    "brier_raw": 0.21483564804032967,
+    "brier_calibrated": 0.1765523362286027,
+    "note": "class_weight='balanced' inflates raw probabilities -- the uncalibrated model predicted a mean of 0.440 against an observed rate of 0.261. Serve calibrated probabilities; isotonic is monotone so ranking (AUC) is unchanged.",
     "reliability_calibrated": [
       {
         "bin": "0.00-0.15",
-        "n": 511,
-        "mean_predicted": 0.1003,
-        "observed_rate": 0.137
+        "n": 579,
+        "mean_predicted": 0.1023,
+        "observed_rate": 0.1468
       },
       {
         "bin": "0.15-0.25",
-        "n": 430,
-        "mean_predicted": 0.2048,
-        "observed_rate": 0.2023
+        "n": 407,
+        "mean_predicted": 0.2021,
+        "observed_rate": 0.199
       },
       {
         "bin": "0.25-0.35",
-        "n": 612,
-        "mean_predicted": 0.2944,
-        "observed_rate": 0.3072
+        "n": 462,
+        "mean_predicted": 0.2992,
+        "observed_rate": 0.2987
       },
       {
         "bin": "0.35-0.45",
-        "n": 4,
-        "mean_predicted": 0.3808,
-        "observed_rate": 0.5
+        "n": 217,
+        "mean_predicted": 0.3676,
+        "observed_rate": 0.4654
       },
       {
         "bin": "0.45-0.60",
-        "n": 153,
-        "mean_predicted": 0.5174,
-        "observed_rate": 0.5425
+        "n": 69,
+        "mean_predicted": 0.5395,
+        "observed_rate": 0.5507
       },
       {
         "bin": "0.60-1.00",
-        "n": 40,
-        "mean_predicted": 0.8109,
-        "observed_rate": 0.65
+        "n": 16,
+        "mean_predicted": 0.7522,
+        "observed_rate": 0.8125
       }
     ],
     "reliability_raw": [
       {
         "bin": "0.00-0.15",
-        "n": 35,
-        "mean_predicted": 0.1202,
-        "observed_rate": 0.0571
+        "n": 138,
+        "mean_predicted": 0.1049,
+        "observed_rate": 0.0942
       },
       {
         "bin": "0.15-0.25",
-        "n": 163,
-        "mean_predicted": 0.2074,
-        "observed_rate": 0.1166
+        "n": 228,
+        "mean_predicted": 0.2026,
+        "observed_rate": 0.1623
       },
       {
         "bin": "0.25-0.35",
-        "n": 330,
-        "mean_predicted": 0.3064,
-        "observed_rate": 0.1576
+        "n": 279,
+        "mean_predicted": 0.3013,
+        "observed_rate": 0.172
       },
       {
         "bin": "0.35-0.45",
-        "n": 435,
-        "mean_predicted": 0.3991,
-        "observed_rate": 0.2046
+        "n": 270,
+        "mean_predicted": 0.4016,
+        "observed_rate": 0.1926
       },
       {
         "bin": "0.45-0.60",
-        "n": 553,
-        "mean_predicted": 0.5207,
-        "observed_rate": 0.3074
+        "n": 412,
+        "mean_predicted": 0.5203,
+        "observed_rate": 0.267
       },
       {
         "bin": "0.60-1.00",
-        "n": 234,
-        "mean_predicted": 0.675,
-        "observed_rate": 0.5299
+        "n": 423,
+        "mean_predicted": 0.7146,
+        "observed_rate": 0.4634
       }
     ]
   },
@@ -222,34 +807,34 @@
       "accuracy": 0.7394285714285714,
       "roc_auc": 0.5
     },
-    "logistic_regression": {
-      "accuracy": 0.6554285714285715,
-      "roc_auc": 0.6819446704086337
-    },
-    "random_forest": {
-      "accuracy": 0.6188571428571429,
+    "random_forest_challenger": {
+      "accuracy": 0.684,
       "roc_auc": 0.6892455733615337
+    },
+    "logistic_regression_shipped": {
+      "accuracy": 0.6342857142857142,
+      "roc_auc": 0.6819446704086337
     }
   },
   "stability": {
     "n_seeds": 10,
-    "random_forest_auc": {
-      "mean": 0.7110611030938028,
-      "std": 0.0171084748327065,
-      "min": 0.6825282345695165,
-      "max": 0.7358326671995737
-    },
-    "logistic_regression_auc": {
+    "shipped_logistic_auc": {
       "mean": 0.7078925308083474,
       "std": 0.017487039169141298,
       "min": 0.6884333432043852,
       "max": 0.7411795008437695
     },
-    "random_forest_accuracy": {
-      "mean": 0.6998036368427387,
-      "std": 0.0173161111876466,
-      "min": 0.6684961580680571,
-      "max": 0.7210884353741497
+    "challenger_random_forest_auc": {
+      "mean": 0.7110611030938028,
+      "std": 0.0171084748327065,
+      "min": 0.6825282345695165,
+      "max": 0.7358326671995737
+    },
+    "shipped_logistic_accuracy": {
+      "mean": 0.6573647160644749,
+      "std": 0.029095894056936404,
+      "min": 0.6209896682979881,
+      "max": 0.716915995397008
     },
     "majority_class_accuracy": {
       "mean": 0.7547785834721894,
@@ -258,25 +843,26 @@
       "max": 0.7790697674418605
     },
     "leaky_play_level_auc": {
-      "mean": 0.7075804956612595,
-      "std": 0.013420988342328218,
-      "min": 0.6918121359429045,
-      "max": 0.7300582859901708
+      "mean": 0.7096041970335507,
+      "std": 0.014042481339543469,
+      "min": 0.6779565444128927,
+      "max": 0.7289563251263662
     },
     "leakage_delta": {
-      "mean": -0.0034806074325432258,
-      "std": 0.021637836631169315,
-      "min": -0.035295138798283054,
-      "max": 0.030504900723017814,
-      "std_error": 0.006842484739311975,
-      "seeds_where_leaky_higher": 5
+      "mean": 0.0017116662252036007,
+      "std": 0.02618608839503572,
+      "min": -0.04244049050781895,
+      "max": 0.040522981921981005,
+      "std_error": 0.00828076823388159,
+      "seeds_where_leaky_higher": 6
     },
-    "random_forest_minus_logistic": {
+    "challenger_minus_shipped": {
       "mean": 0.003168572285455473,
       "std": 0.010375651084212165,
       "min": -0.009273369992144675,
       "max": 0.021063953912345945,
-      "seeds_where_rf_higher": 6
+      "std_error": 0.003281068963330595,
+      "seeds_where_challenger_higher": 6
     }
   },
   "data_source": "NFL Big Data Bowl 2023 (Kaggle)",
