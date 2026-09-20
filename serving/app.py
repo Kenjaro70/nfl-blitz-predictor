@@ -37,7 +37,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="NFL Blitz Predictor",
     description="Predict whether the defense will blitz on a given pre-snap situation.",
-    version="0.1.0",
+    # 0.2.0 is a breaking change from 0.1.0: the request field absolute_yardline_number
+    # became yards_to_goal, and the confidence / num_pass_rushers_estimate response
+    # fields were removed. Probabilities are now calibrated, so the same play returns a
+    # materially lower (and correct) number than 0.1.0 did.
+    version="0.2.0",
     lifespan=lifespan,
 )
 

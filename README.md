@@ -202,9 +202,16 @@ stability seed, so it takes a few minutes rather than seconds.
 
 ### Pull from Docker Hub (fastest)
 ```powershell
-docker pull kenjaro/nfl-blitz-predictor:latest
+docker pull kenjaro/nfl-blitz-predictor:latest   # currently 0.2.0
 docker run -p 8000:8000 kenjaro/nfl-blitz-predictor:latest
 ```
+
+> **0.2.0 is a breaking change from 0.1.0.** The request field `absolute_yardline_number`
+> became `yards_to_goal` (and means something different — see the model card), the
+> `confidence` and `num_pass_rushers_estimate` response fields were removed, and
+> probabilities are now calibrated, so the same play returns a materially lower and more
+> honest number than 0.1.0 did. Pin `:0.1.0` if you need the old contract, though its
+> probabilities are inflated by roughly 2x.
 
 ### Build from source
 Copy the artifacts into the serving image:
