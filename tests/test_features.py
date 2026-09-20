@@ -106,7 +106,9 @@ class TestEngineerFeatures:
             "quarter": 1,
             "down": 1,
             "yardsToGo": 10,
-            "absoluteYardlineNumber": 75,
+            # KC has the ball on its own 25 -> 75 yards from BUF's goal line
+            "yardlineSide": "KC",
+            "yardlineNumber": 25,
             "preSnapHomeScore": 0,
             "preSnapVisitorScore": 0,
             "gameClock": "15:00",
@@ -162,24 +164,74 @@ class TestEngineerFeatures:
         result = engineer_features(plays, self._games())
         assert result.iloc[0]["is_two_minute"] == 0
 
+    # --- yards_to_goal: distance to the OPPONENT's goal line, direction-independent ---
+
+    def test_yards_to_goal_own_half(self):
+        # KC has the ball on its own 25 -> 75 yards to BUF's end zone
+        plays = self._make_plays(yardlineSide="KC", yardlineNumber=25)
+        result = engineer_features(plays, self._games())
+        assert result.iloc[0]["yards_to_goal"] == 75
+
+    def test_yards_to_goal_opponent_half(self):
+        # KC has the ball on BUF's 25 -> 25 yards to BUF's end zone
+        plays = self._make_plays(yardlineSide="BUF", yardlineNumber=25)
+        result = engineer_features(plays, self._games())
+        assert result.iloc[0]["yards_to_goal"] == 25
+
+    def test_yards_to_goal_at_midfield_null_side(self):
+        # yardlineSide is null at the 50; both branches must give 50
+        plays = self._make_plays(yardlineSide=None, yardlineNumber=50)
+        result = engineer_features(plays, self._games())
+        assert result.iloc[0]["yards_to_goal"] == 50
+
+    def test_yards_to_goal_is_symmetric_across_possession(self):
+        # Same physical spot, opposite offense -> distances must sum to 100.
+        kc = engineer_features(
+            self._make_plays(possessionTeam="KC", defensiveTeam="BUF",
+                             yardlineSide="KC", yardlineNumber=30),
+            self._games(),
+        )
+        buf = engineer_features(
+            self._make_plays(possessionTeam="BUF", defensiveTeam="KC",
+                             yardlineSide="KC", yardlineNumber=30),
+            self._games(),
+        )
+        assert kc.iloc[0]["yards_to_goal"] + buf.iloc[0]["yards_to_goal"] == 100
+
     def test_is_red_zone(self):
-        plays = self._make_plays(absoluteYardlineNumber=15)
+        # Ball on BUF's 15 -> inside the scoring red zone
+        plays = self._make_plays(yardlineSide="BUF", yardlineNumber=15)
         result = engineer_features(plays, self._games())
         assert result.iloc[0]["is_red_zone"] == 1
 
     def test_not_red_zone_at_midfield(self):
-        plays = self._make_plays(absoluteYardlineNumber=50)
+        plays = self._make_plays(yardlineSide=None, yardlineNumber=50)
         result = engineer_features(plays, self._games())
         assert result.iloc[0]["is_red_zone"] == 0
 
+    def test_not_red_zone_when_backed_up_at_own_goal_line(self):
+        # Regression: the old code used absoluteYardlineNumber and flagged the
+        # offense's OWN 15 as "red zone" -- the opposite situation.
+        plays = self._make_plays(yardlineSide="KC", yardlineNumber=15)
+        result = engineer_features(plays, self._games())
+        assert result.iloc[0]["yards_to_goal"] == 85
+        assert result.iloc[0]["is_red_zone"] == 0
+
     def test_is_goal_to_go(self):
-        # Ball at the 3, 4 yards to go -> goal-to-go (4 >= 3)
-        plays = self._make_plays(absoluteYardlineNumber=3, yardsToGo=4)
+        # Ball on BUF's 3, 4 yards to go -> goal-to-go (4 >= 3)
+        plays = self._make_plays(yardlineSide="BUF", yardlineNumber=3, yardsToGo=4)
         result = engineer_features(plays, self._games())
         assert result.iloc[0]["is_goal_to_go"] == 1
 
     def test_not_goal_to_go_midfield_first_and_ten(self):
-        plays = self._make_plays(absoluteYardlineNumber=50, yardsToGo=10)
+        plays = self._make_plays(yardlineSide=None, yardlineNumber=50, yardsToGo=10)
+        result = engineer_features(plays, self._games())
+        assert result.iloc[0]["is_goal_to_go"] == 0
+
+    def test_not_goal_to_go_on_own_side_with_short_yardage(self):
+        # Regression: 1st & 1 on your own 2 is not goal-to-go. The old formula
+        # compared yardsToGo against a field coordinate and got this wrong.
+        plays = self._make_plays(yardlineSide="KC", yardlineNumber=2, yardsToGo=1)
         result = engineer_features(plays, self._games())
         assert result.iloc[0]["is_goal_to_go"] == 0
 
