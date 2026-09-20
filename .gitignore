@@ -1,8 +1,18 @@
+# BDB 2023 source data -- get it from Kaggle, see README
 data/*.csv
 data/*.parquet
 data/*.zip
+data/
+data nfl 2023/
+nfl-big-data-bowl-2023.zip
+
+# Training build output. Only the serving/ copies of the artifacts are tracked.
 training/models/*.joblib
 training/models/*.json
+
+# Cached external data, re-downloaded on demand by analyze_cost_ratio.py
+training/pbp_2021.parquet
+
 **/__pycache__/
 .pytest_cache/
 *.pyc

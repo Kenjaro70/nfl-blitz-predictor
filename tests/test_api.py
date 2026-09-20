@@ -44,7 +44,7 @@ def sample_play():
         "quarter": 3,
         "down": 3,
         "yards_to_go": 8,
-        "absolute_yardline_number": 45,
+        "yards_to_goal": 45,
         "defenders_in_box": 6,
         "pre_snap_home_score": 14,
         "pre_snap_visitor_score": 17,
@@ -79,14 +79,39 @@ def test_predict_returns_valid_probability(client, sample_play):
     body = r.json()
     assert 0.0 <= body["blitz_probability"] <= 1.0
     assert isinstance(body["will_blitz"], bool)
-    assert body["confidence"] in {"very high", "high", "moderate", "low"}
-    assert "rusher" in body["num_pass_rushers_estimate"].lower()
+    assert 0.0 < body["decision_threshold"] < 1.0
+    assert body["cost_ratio_fn_to_fp"] > 0
+    assert 0.0 < body["base_rate"] < 1.0
+    assert body["recommendation"]
 
 
-def test_predict_will_blitz_aligns_with_probability(client, sample_play):
+def test_predict_will_blitz_uses_tuned_threshold_not_half(client, sample_play):
+    """will_blitz must follow the cost-tuned threshold from metadata, not 0.5."""
     r = client.post("/predict", json=sample_play)
     body = r.json()
-    assert body["will_blitz"] == (body["blitz_probability"] >= 0.5)
+    assert body["will_blitz"] == (body["blitz_probability"] >= body["decision_threshold"])
+
+
+def test_response_drops_fabricated_fields(client, sample_play):
+    """The model is binary and miscalibrated bands are meaningless -- neither a
+    rusher-count estimate nor a confidence label should reappear."""
+    body = client.post("/predict", json=sample_play).json()
+    assert "num_pass_rushers_estimate" not in body
+    assert "confidence" not in body
+
+
+def test_lift_is_consistent_with_probability_and_base_rate(client, sample_play):
+    body = client.post("/predict", json=sample_play).json()
+    expected = body["blitz_probability"] / body["base_rate"]
+    assert abs(body["lift_over_base_rate"] - expected) < 0.01
+
+
+def test_probabilities_are_calibrated_not_raw(client, sample_play):
+    """The raw model over-predicts badly (class_weight='balanced'). A calibrated
+    response for an average-ish play should sit near the base rate, not near 0.5."""
+    body = client.post("/predict", json=sample_play).json()
+    assert body["blitz_probability"] < 0.45, (
+        "probability looks uncalibrated -- is the calibrator being applied?")
 
 
 def test_predict_rejects_missing_field(client, sample_play):
@@ -127,7 +152,7 @@ def test_predict_football_sanity_red_zone_heavy_box(client, sample_play):
         "quarter": 4,
         "down": 4,
         "yards_to_go": 1,
-        "absolute_yardline_number": 2,
+        "yards_to_goal": 2,
         "defenders_in_box": 9,
         "game_clock": "1:45",
     }

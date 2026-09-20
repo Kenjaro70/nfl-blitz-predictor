@@ -11,7 +11,7 @@
     "quarter",
     "down",
     "yardsToGo",
-    "absoluteYardlineNumber",
+    "yards_to_goal",
     "defendersInBox",
     "preSnapHomeScore",
     "preSnapVisitorScore",
@@ -34,7 +34,7 @@
     "quarter",
     "down",
     "yardsToGo",
-    "absoluteYardlineNumber",
+    "yards_to_goal",
     "defendersInBox",
     "preSnapHomeScore",
     "preSnapVisitorScore",
@@ -47,11 +47,237 @@
     "is_goal_to_go"
   ],
   "metrics": {
-    "accuracy": 0.6817142857142857,
-    "roc_auc": 0.6888693429865236,
+    "roc_auc": 0.6892455733615337,
+    "accuracy": 0.6188571428571429,
+    "majority_class_accuracy": 0.7394285714285714,
+    "blitz_precision": 0.3695920889987639,
+    "blitz_recall": 0.6557017543859649,
+    "blitz_f1": 0.4727272727272727,
     "train_size": 6799,
     "test_size": 1750,
-    "blitz_rate": 0.24599368347175107
+    "blitz_rate": 0.24599368347175107,
+    "test_blitz_rate": 0.26057142857142856,
+    "confusion_matrix": [
+      [
+        784,
+        510
+      ],
+      [
+        157,
+        299
+      ]
+    ],
+    "confusion_matrix_at_default_0.50": [
+      [
+        955,
+        339
+      ],
+      [
+        214,
+        242
+      ]
+    ],
+    "brier_raw": 0.20571837871698562,
+    "brier_calibrated": 0.17517595994555463,
+    "primary_metric": "roc_auc",
+    "accuracy_note": "Accuracy is below the majority-class floor by design: the decision threshold is tuned to a 3:1 cost on missed blitzes, which buys recall with accuracy. Use roc_auc, the blitz-class precision/recall, and expected cost per play instead."
+  },
+  "decision_rule": {
+    "threshold": 0.25,
+    "cost_false_negative": 3.0,
+    "cost_false_positive": 1.0,
+    "threshold_source": "Closed form C_FP/(C_FP+C_FN) on isotonic-calibrated probabilities, cross-checked against a grid search on out-of-fold training predictions (grid picked 0.25).",
+    "grid_threshold_on_out_of_fold": 0.25,
+    "rationale": "Consumer is an offensive analyst deciding whether to keep extra protection in. A missed blitz gives up a free rusher; a false alarm costs one route runner. 3:1 is an ASSUMPTION, not a measurement -- see cost_ratio_sensitivity for how the operating point moves.",
+    "cost_ratio_provenance": "Asserted, not measured. analyze_cost_ratio.py attempts to derive it from EPA and fails to identify it (pff_role is post-snap, so 'extra blocker' marks max-protect play design rather than a protection call; the false-alarm cost comes out wrong-signed). That analysis does show a sack costs ~2.06 EPA and a blitz adds 2.7pp of sack risk, but the net EPA effect of a blitz is only ~-0.036 (95% CI -0.094 to +0.025), which bounds what any blitz warning can be worth. See models/cost_ratio_analysis.json.",
+    "cost_ratio_sensitivity": [
+      {
+        "cost_ratio_fn_to_fp": 1,
+        "threshold": 0.5,
+        "blitz_precision": 0.5642,
+        "blitz_recall": 0.2215,
+        "alert_rate": 0.1023
+      },
+      {
+        "cost_ratio_fn_to_fp": 2,
+        "threshold": 0.3333,
+        "blitz_precision": 0.4843,
+        "blitz_recall": 0.4408,
+        "alert_rate": 0.2371
+      },
+      {
+        "cost_ratio_fn_to_fp": 3,
+        "threshold": 0.25,
+        "blitz_precision": 0.3696,
+        "blitz_recall": 0.6557,
+        "alert_rate": 0.4623
+      },
+      {
+        "cost_ratio_fn_to_fp": 5,
+        "threshold": 0.1667,
+        "blitz_precision": 0.3174,
+        "blitz_recall": 0.818,
+        "alert_rate": 0.6714
+      },
+      {
+        "cost_ratio_fn_to_fp": 8,
+        "threshold": 0.1111,
+        "blitz_precision": 0.2785,
+        "blitz_recall": 0.9539,
+        "alert_rate": 0.8926
+      }
+    ],
+    "expected_cost_per_play": {
+      "always_no_blitz": 0.7817,
+      "always_blitz": 0.7394,
+      "raw_probability_at_0.50": 0.5606,
+      "calibrated_at_tuned_threshold": 0.5606
+    }
+  },
+  "calibration": {
+    "method": "IsotonicRegression fit on out-of-fold training predictions",
+    "artifact": "blitz_calibrator.joblib",
+    "brier_raw": 0.20571837871698562,
+    "brier_calibrated": 0.17517595994555463,
+    "note": "class_weight='balanced' inflates raw probabilities -- the uncalibrated model predicted a mean of 0.434 against an observed rate of 0.261. Serve calibrated probabilities; isotonic is monotone so ranking (AUC) is unchanged.",
+    "reliability_calibrated": [
+      {
+        "bin": "0.00-0.15",
+        "n": 511,
+        "mean_predicted": 0.1003,
+        "observed_rate": 0.137
+      },
+      {
+        "bin": "0.15-0.25",
+        "n": 430,
+        "mean_predicted": 0.2048,
+        "observed_rate": 0.2023
+      },
+      {
+        "bin": "0.25-0.35",
+        "n": 612,
+        "mean_predicted": 0.2944,
+        "observed_rate": 0.3072
+      },
+      {
+        "bin": "0.35-0.45",
+        "n": 4,
+        "mean_predicted": 0.3808,
+        "observed_rate": 0.5
+      },
+      {
+        "bin": "0.45-0.60",
+        "n": 153,
+        "mean_predicted": 0.5174,
+        "observed_rate": 0.5425
+      },
+      {
+        "bin": "0.60-1.00",
+        "n": 40,
+        "mean_predicted": 0.8109,
+        "observed_rate": 0.65
+      }
+    ],
+    "reliability_raw": [
+      {
+        "bin": "0.00-0.15",
+        "n": 35,
+        "mean_predicted": 0.1202,
+        "observed_rate": 0.0571
+      },
+      {
+        "bin": "0.15-0.25",
+        "n": 163,
+        "mean_predicted": 0.2074,
+        "observed_rate": 0.1166
+      },
+      {
+        "bin": "0.25-0.35",
+        "n": 330,
+        "mean_predicted": 0.3064,
+        "observed_rate": 0.1576
+      },
+      {
+        "bin": "0.35-0.45",
+        "n": 435,
+        "mean_predicted": 0.3991,
+        "observed_rate": 0.2046
+      },
+      {
+        "bin": "0.45-0.60",
+        "n": 553,
+        "mean_predicted": 0.5207,
+        "observed_rate": 0.3074
+      },
+      {
+        "bin": "0.60-1.00",
+        "n": 234,
+        "mean_predicted": 0.675,
+        "observed_rate": 0.5299
+      }
+    ]
+  },
+  "baseline_comparison": {
+    "majority_class": {
+      "accuracy": 0.7394285714285714,
+      "roc_auc": 0.5
+    },
+    "logistic_regression": {
+      "accuracy": 0.6554285714285715,
+      "roc_auc": 0.6819446704086337
+    },
+    "random_forest": {
+      "accuracy": 0.6188571428571429,
+      "roc_auc": 0.6892455733615337
+    }
+  },
+  "stability": {
+    "n_seeds": 10,
+    "random_forest_auc": {
+      "mean": 0.7110611030938028,
+      "std": 0.0171084748327065,
+      "min": 0.6825282345695165,
+      "max": 0.7358326671995737
+    },
+    "logistic_regression_auc": {
+      "mean": 0.7078925308083474,
+      "std": 0.017487039169141298,
+      "min": 0.6884333432043852,
+      "max": 0.7411795008437695
+    },
+    "random_forest_accuracy": {
+      "mean": 0.6998036368427387,
+      "std": 0.0173161111876466,
+      "min": 0.6684961580680571,
+      "max": 0.7210884353741497
+    },
+    "majority_class_accuracy": {
+      "mean": 0.7547785834721894,
+      "std": 0.01746361848339112,
+      "min": 0.7330070690592714,
+      "max": 0.7790697674418605
+    },
+    "leaky_play_level_auc": {
+      "mean": 0.7075804956612595,
+      "std": 0.013420988342328218,
+      "min": 0.6918121359429045,
+      "max": 0.7300582859901708
+    },
+    "leakage_delta": {
+      "mean": -0.0034806074325432258,
+      "std": 0.021637836631169315,
+      "min": -0.035295138798283054,
+      "max": 0.030504900723017814,
+      "std_error": 0.006842484739311975,
+      "seeds_where_leaky_higher": 5
+    },
+    "random_forest_minus_logistic": {
+      "mean": 0.003168572285455473,
+      "std": 0.010375651084212165,
+      "min": -0.009273369992144675,
+      "max": 0.021063953912345945,
+      "seeds_where_rf_higher": 6
+    }
   },
   "data_source": "NFL Big Data Bowl 2023 (Kaggle)",
   "training_seasons": "2021 weeks 1-8"

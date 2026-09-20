@@ -18,15 +18,17 @@ MODEL_DIR = Path(__file__).parent / "models"
 
 model = None
 label_encoders = None
+calibrator = None
 metadata = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load model artifacts on startup, hold them until shutdown."""
-    global model, label_encoders, metadata
+    global model, label_encoders, calibrator, metadata
     model = joblib.load(MODEL_DIR / "blitz_model.joblib")
     label_encoders = joblib.load(MODEL_DIR / "label_encoders.joblib")
+    calibrator = joblib.load(MODEL_DIR / "blitz_calibrator.joblib")
     with open(MODEL_DIR / "model_metadata.json") as f:
         metadata = json.load(f)
     yield
@@ -49,7 +51,14 @@ class PlayContext(BaseModel):
     quarter: int = Field(..., ge=1, le=5)
     down: int = Field(..., ge=1, le=4)
     yards_to_go: int = Field(..., ge=0, le=100)
-    absolute_yardline_number: int = Field(..., ge=1, le=99, description="Yards from offense's goal line")
+    yards_to_goal: int = Field(
+        ..., ge=1, le=99,
+        description="Yards from the ball to the OPPONENT's goal line (1-99). "
+                    "1 = about to score, 99 = backed up against own end zone. "
+                    "Not the raw absoluteYardlineNumber from plays.csv, which is a "
+                    "direction-dependent field coordinate; derive this from "
+                    "yardlineSide + yardlineNumber instead.",
+    )
     defenders_in_box: int = Field(..., ge=0, le=11, description="Defenders within ~5 yards of LOS pre-snap")
     pre_snap_home_score: int = Field(..., ge=0)
     pre_snap_visitor_score: int = Field(..., ge=0)
@@ -58,10 +67,23 @@ class PlayContext(BaseModel):
 
 
 class PredictionResponse(BaseModel):
-    blitz_probability: float
-    will_blitz: bool
-    confidence: str
-    num_pass_rushers_estimate: str
+    blitz_probability: float = Field(
+        ..., description="Calibrated probability the defense sends 5+ rushers. "
+                         "Calibrated means 0.30 really does hit ~30% of the time.")
+    will_blitz: bool = Field(
+        ..., description="blitz_probability >= decision_threshold. This is an alert "
+                         "flag tuned to a cost asymmetry, not a claim that a blitz is "
+                         "more likely than not.")
+    decision_threshold: float = Field(
+        ..., description="Alert cutoff, from the cost ratio below.")
+    cost_ratio_fn_to_fp: float = Field(
+        ..., description="How much worse a missed blitz is than a false alarm. "
+                         "Sets the threshold; change it and the threshold moves.")
+    base_rate: float = Field(..., description="Blitz rate in the training data.")
+    lift_over_base_rate: float = Field(
+        ..., description="blitz_probability / base_rate. 1.0 means this situation is "
+                         "no more blitz-prone than an average pass play.")
+    recommendation: str
 
 
 class BatchRequest(BaseModel):
@@ -94,8 +116,8 @@ def build_feature_row(play: PlayContext) -> pd.DataFrame:
     )
 
     is_two_minute = int(play.quarter in (2, 4) and clock_seconds <= 120)
-    is_red_zone = int(play.absolute_yardline_number <= 20)
-    is_goal_to_go = int(play.yards_to_go >= play.absolute_yardline_number)
+    is_red_zone = int(play.yards_to_goal <= 20)
+    is_goal_to_go = int(play.yards_to_go >= play.yards_to_goal)
 
     row = {
         "possessionTeam": encode_categorical(play.possession_team, label_encoders["possessionTeam"]),
@@ -106,7 +128,7 @@ def build_feature_row(play: PlayContext) -> pd.DataFrame:
         "quarter": play.quarter,
         "down": play.down,
         "yardsToGo": play.yards_to_go,
-        "absoluteYardlineNumber": play.absolute_yardline_number,
+        "yards_to_goal": play.yards_to_goal,
         "defendersInBox": play.defenders_in_box,
         "preSnapHomeScore": play.pre_snap_home_score,
         "preSnapVisitorScore": play.pre_snap_visitor_score,
@@ -121,25 +143,48 @@ def build_feature_row(play: PlayContext) -> pd.DataFrame:
     return pd.DataFrame([row])[metadata["feature_order"]]
 
 
-def describe_confidence(p: float) -> str:
-    distance = abs(p - 0.5)
-    if distance >= 0.35:
-        return "very high"
-    if distance >= 0.20:
-        return "high"
-    if distance >= 0.10:
-        return "moderate"
-    return "low"
+def decision_rule() -> dict:
+    return metadata.get("decision_rule", {})
 
 
-def describe_rusher_estimate(p: float) -> str:
-    if p < 0.25:
-        return "likely 3-4 rushers (standard front)"
-    if p < 0.5:
-        return "likely 4 rushers, possible 5"
-    if p < 0.75:
-        return "likely 5 rushers (blitz)"
-    return "likely 6+ rushers (heavy blitz)"
+def build_response(raw_proba: float) -> PredictionResponse:
+    """Calibrate, apply the tuned threshold, and report both.
+
+    Deliberately absent: a "confidence" label and an estimated rusher count. The
+    model is binary and never predicts a count, and a confidence band derived from
+    distance-to-0.5 says nothing about how trustworthy any single probability is.
+    Both were removed rather than dressed up.
+    """
+    rule = decision_rule()
+    threshold = float(rule.get("threshold", 0.5))
+    cost_ratio = float(rule.get("cost_false_negative", 1.0)) / float(
+        rule.get("cost_false_positive", 1.0))
+    base_rate = float(metadata["metrics"]["blitz_rate"])
+
+    proba = float(calibrator.predict([raw_proba])[0])
+    alert = proba >= threshold
+
+    if alert:
+        recommendation = (
+            f"Blitz probability {proba:.0%} is at or above the {threshold:.0%} alert "
+            f"threshold (tuned for a {cost_ratio:.0f}:1 cost on missed blitzes). "
+            "Favor extra protection."
+        )
+    else:
+        recommendation = (
+            f"Blitz probability {proba:.0%} is below the {threshold:.0%} alert "
+            "threshold. Standard protection."
+        )
+
+    return PredictionResponse(
+        blitz_probability=round(proba, 4),
+        will_blitz=bool(alert),
+        decision_threshold=round(threshold, 4),
+        cost_ratio_fn_to_fp=cost_ratio,
+        base_rate=round(base_rate, 4),
+        lift_over_base_rate=round(proba / base_rate, 2),
+        recommendation=recommendation,
+    )
 
 
 @app.get("/")
@@ -163,13 +208,7 @@ def predict(play: PlayContext):
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     X = build_feature_row(play)
-    proba = float(model.predict_proba(X)[0, 1])
-    return PredictionResponse(
-        blitz_probability=round(proba, 4),
-        will_blitz=proba >= 0.5,
-        confidence=describe_confidence(proba),
-        num_pass_rushers_estimate=describe_rusher_estimate(proba),
-    )
+    return build_response(float(model.predict_proba(X)[0, 1]))
 
 
 @app.post("/predict-batch", response_model=List[PredictionResponse])
@@ -178,12 +217,4 @@ def predict_batch(request: BatchRequest):
         raise HTTPException(status_code=503, detail="Model not loaded")
     rows = pd.concat([build_feature_row(p) for p in request.plays], ignore_index=True)
     probas = model.predict_proba(rows)[:, 1]
-    return [
-        PredictionResponse(
-            blitz_probability=round(float(p), 4),
-            will_blitz=bool(p >= 0.5),
-            confidence=describe_confidence(p),
-            num_pass_rushers_estimate=describe_rusher_estimate(p),
-        )
-        for p in probas
-    ]
+    return [build_response(float(p)) for p in probas]
