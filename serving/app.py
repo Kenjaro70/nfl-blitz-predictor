@@ -1,6 +1,7 @@
 """FastAPI serving layer for the NFL blitz predictor.
 
-Loads the trained Random Forest, label encoders, and metadata at startup.
+Loads the trained logistic regression, its isotonic calibrator, label encoders,
+and metadata at startup.
 Accepts pre-snap offensive context and returns blitz probability.
 """
 import json

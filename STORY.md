@@ -118,8 +118,8 @@ play-level split, same model, same seed, paired:
 | **Paired difference (leaky − honest)** | **+0.0017 ± 0.0083 (SE)** |
 
 The leaky split scored higher in **6 of 10 seeds** — exactly what you'd expect from a
-coin flip. The point estimate is slightly negative. There is no detectable leakage effect
-at this sample size.
+coin flip. The point estimate, +0.0017, is a fifth of its standard error. There is no
+detectable leakage effect at this sample size.
 
 The −0.015 I originally reported was one draw from a distribution with a standard
 deviation of 0.018. I'd measured noise and told a story about it. The story was
