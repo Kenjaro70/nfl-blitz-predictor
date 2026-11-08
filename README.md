@@ -363,8 +363,10 @@ python -m pytest tests/ -v
 - **Label definition:** blitz = 5 or more defenders with `pff_role == 'Pass Rush'`
 - **Data:** 2021 NFL regular season, weeks 1–8 (8,549 labeled pass plays; 24.6% blitz rate)
 - **Train/test split:** `GroupShuffleSplit` by `gameId`, 80/20, random_state=42 — 97 train
-  games / 25 test games, no game in both. A stratified play-level split leaks defensive
-  scheme between plays in the same game; see [STORY.md](STORY.md).
+  games / 25 test games, no game in both. By-game matches the real question: games the
+  model has not seen. A play-level split could in principle leak defensive scheme between
+  plays in the same game, but over 10 paired splits the effect was not detectable
+  (+0.0017 AUC, SE 0.0083); see [STORY.md](STORY.md).
 - **Primary metric:** ROC AUC. Accuracy is reported but is below the majority-class
   floor by design — see [Why not accuracy?](#why-not-accuracy).
 - **Feature admission rule:** a field is used only if (1) its value is fixed before the snap
